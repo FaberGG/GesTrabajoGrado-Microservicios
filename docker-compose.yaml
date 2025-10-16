@@ -4,7 +4,7 @@ services:
   # API Gateway - Punto de entrada único al sistema
   gateway:
     build:
-      context: .
+      context: ./gateway-service
       dockerfile: Dockerfile
     container_name: gateway-service
     restart: unless-stopped
@@ -53,7 +53,7 @@ services:
   # Identity Service - Autenticación y gestión de usuarios
   identity:
     build:
-      context: ../identity-service
+      context: ./identity-service
       dockerfile: Dockerfile
     container_name: identity-service
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8081
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${IDENTITY_DB_URL}
+      - DATABASE_URL=jdbc:postgresql://postgres-identity:5432/identity_db
       - DATABASE_USERNAME=${IDENTITY_DB_USER}
       - DATABASE_PASSWORD=${IDENTITY_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
@@ -72,6 +72,8 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      postgres-identity:
         condition: service_healthy
     networks:
       - trabajo-grado-network
@@ -93,7 +95,7 @@ services:
   # Submission Service - Gestión de entregas y documentos
   submission:
     build:
-      context: ../submission-service
+      context: ./submission-service
       dockerfile: Dockerfile
     container_name: submission-service
     restart: unless-stopped
@@ -103,7 +105,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8082
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${SUBMISSION_DB_URL}
+      - DATABASE_URL=jdbc:postgresql://postgres-submission:5432/submission_db
       - DATABASE_USERNAME=${SUBMISSION_DB_USER}
       - DATABASE_PASSWORD=${SUBMISSION_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
@@ -115,6 +117,8 @@ services:
       - submission-uploads:/app/uploads
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      postgres-submission:
         condition: service_healthy
     networks:
       - trabajo-grado-network
@@ -136,7 +140,7 @@ services:
   # Notification Service - Envío de notificaciones
   notification:
     build:
-      context: ../notification-service
+      context: ./notification-service
       dockerfile: Dockerfile
     container_name: notification-service
     restart: unless-stopped
@@ -146,7 +150,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8083
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${NOTIFICATION_DB_URL}
+      - DATABASE_URL=jdbc:postgresql://postgres-notification:5432/notification_db
       - DATABASE_USERNAME=${NOTIFICATION_DB_USER}
       - DATABASE_PASSWORD=${NOTIFICATION_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
@@ -160,6 +164,8 @@ services:
       - SMTP_FROM=${SMTP_FROM}
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      postgres-notification:
         condition: service_healthy
     networks:
       - trabajo-grado-network
@@ -190,6 +196,7 @@ services:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
       - RABBITMQ_DEFAULT_VHOST=/
+      - RABBITMQ_NODENAME=rabbit@rabbitmq
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - rabbitmq-logs:/var/log/rabbitmq
@@ -210,12 +217,75 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  # Base de datos PostgreSQL para Identity Service
+  postgres-identity:
+    image: postgres:15-alpine
+    container_name: postgres-identity
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=identity_db
+      - POSTGRES_USER=${IDENTITY_DB_USER}
+      - POSTGRES_PASSWORD=${IDENTITY_DB_PASS}
+    volumes:
+      - postgres-identity-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos PostgreSQL para Submission Service
+  postgres-submission:
+    image: postgres:15-alpine
+    container_name: postgres-submission
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=submission_db
+      - POSTGRES_USER=${SUBMISSION_DB_USER}
+      - POSTGRES_PASSWORD=${SUBMISSION_DB_PASS}
+    volumes:
+      - postgres-submission-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos PostgreSQL para Notification Service
+  postgres-notification:
+    image: postgres:15-alpine
+    container_name: postgres-notification
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=notification_db
+      - POSTGRES_USER=${NOTIFICATION_DB_USER}
+      - POSTGRES_PASSWORD=${NOTIFICATION_DB_PASS}
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   trabajo-grado-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.28.0.0/16
 
 volumes:
   rabbitmq-data:
@@ -223,4 +293,10 @@ volumes:
   rabbitmq-logs:
     driver: local
   submission-uploads:
+    driver: local
+  postgres-identity-data:
+    driver: local
+  postgres-submission-data:
+    driver: local
+  postgres-notification-data:
     driver: local

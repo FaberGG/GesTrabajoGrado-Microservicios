@@ -1,0 +1,34 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+submission:
+  exchange: submission.exchange
+  queue: submission.queue
+  routing-key: submission.created
+
+notification:
+  base-url: http://notification:8083/api/notifications
+  timeout-ms: 3000
+
+logging:
+  level:
+    root: WARN
+    co.unicauca: INFO
+  file:
+    name: logs/submission-service.log

@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Base de datos PostgreSQL para notification service
   notification-postgres:
     image: postgres:15-alpine
     container_name: notification-postgres
@@ -11,7 +10,7 @@ services:
       POSTGRES_PASSWORD: noti_pass
       POSTGRES_DB: notification_db
     ports:
-      - "5433:5432"  # Puerto diferente para no conflictuar
+      - "5433:5432"
     volumes:
       - notification-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +21,6 @@ services:
     networks:
       - notification-network
 
-  # RabbitMQ para desarrollo local
   rabbitmq-local:
     image: rabbitmq:3.12-management-alpine
     container_name: rabbitmq-local
@@ -44,7 +42,6 @@ services:
     networks:
       - notification-network
 
-  # Notification Service
   notification-service:
     build:
       context: .
@@ -64,13 +61,7 @@ services:
       - SPRING_RABBITMQ_PORT=5672
       - SPRING_RABBITMQ_USERNAME=guest
       - SPRING_RABBITMQ_PASSWORD=guest
-      # Configuración SMTP (usando Mailtrap o similar para desarrollo)
-      - SPRING_MAIL_HOST=${SMTP_HOST:-smtp.mailtrap.io}
-      - SPRING_MAIL_PORT=${SMTP_PORT:-2525}
-      - SPRING_MAIL_USERNAME=${SMTP_USERNAME:-your-username}
-      - SPRING_MAIL_PASSWORD=${SMTP_PASSWORD:-your-password}
-      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
-      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+      - NOTIFICATION_MAIL_MOCK=true
     depends_on:
       notification-postgres:
         condition: service_healthy

@@ -27,8 +27,23 @@ public class NotifierService {
         }
 
         String correlationId = MDC.get("correlationId");
-        log.info("Sending synchronous notification to {} via {} with correlationId={}",
-                request.to(), request.channel(), correlationId);
+
+        // Simular envío según el canal
+        if ("email".equalsIgnoreCase(request.channel())) {
+            log.info("📧 [EMAIL MOCK] Enviando correo a: {}", request.to());
+            log.info("   Asunto: Notificación del Sistema");
+            log.info("   Mensaje: {}", request.message());
+            log.info("   CorrelationId: {}", correlationId);
+        } else if ("sms".equalsIgnoreCase(request.channel())) {
+            log.info("📱 [SMS MOCK] Enviando SMS a: {}", request.to());
+            log.info("   Mensaje: {}", request.message());
+            log.info("   CorrelationId: {}", correlationId);
+        } else {
+            log.info("🔔 [NOTIFICATION MOCK] Canal: {} - Destinatario: {}",
+                    request.channel(), request.to());
+            log.info("   Mensaje: {}", request.message());
+            log.info("   CorrelationId: {}", correlationId);
+        }
 
         return new NotificationResponse(UUID.randomUUID(), "SENT", correlationId);
     }
@@ -46,7 +61,22 @@ public class NotifierService {
         if (request.forceFail()) {
             throw new RuntimeException("Forced failure for async processing");
         }
-        log.info("Sending async notification to {} via {} with correlationId={}",
-                request.to(), request.channel(), correlationId);
+
+        // Simular envío según el canal
+        if ("email".equalsIgnoreCase(request.channel())) {
+            log.info("📧 [EMAIL MOCK ASYNC] Enviando correo a: {}", request.to());
+            log.info("   Asunto: Notificación del Sistema");
+            log.info("   Mensaje: {}", request.message());
+            log.info("   CorrelationId: {}", correlationId);
+        } else if ("sms".equalsIgnoreCase(request.channel())) {
+            log.info("📱 [SMS MOCK ASYNC] Enviando SMS a: {}", request.to());
+            log.info("   Mensaje: {}", request.message());
+            log.info("   CorrelationId: {}", correlationId);
+        } else {
+            log.info("🔔 [NOTIFICATION MOCK ASYNC] Canal: {} - Destinatario: {}",
+                    request.channel(), request.to());
+            log.info("   Mensaje: {}", request.message());
+            log.info("   CorrelationId: {}", correlationId);
+        }
     }
 }

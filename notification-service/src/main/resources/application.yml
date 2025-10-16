@@ -14,17 +14,6 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-  # Si usas JPA, descomenta esto:
-  # jpa:
-  #   hibernate:
-  #     ddl-auto: validate
-  #   show-sql: false
-  #   properties:
-  #     hibernate:
-  #       dialect: org.hibernate.dialect.PostgreSQLDialect
-  #       format_sql: true
-
-  # RabbitMQ Configuration
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -40,44 +29,25 @@ spring:
           multiplier: 2
           max-interval: 10000
 
-  # Mail Configuration
-  mail:
-    host: ${SMTP_HOST:smtp.gmail.com}
-    port: ${SMTP_PORT:587}
-    username: ${SMTP_USERNAME}
-    password: ${SMTP_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
-    default-encoding: UTF-8
-
 server:
   port: ${SERVER_PORT:8083}
   compression:
     enabled: true
 
-# JWT Configuration
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000
 
-# Notification specific config
 notification:
+  mail:
+    mock: ${NOTIFICATION_MAIL_MOCK:true}
   from:
-    email: ${SMTP_FROM:noreply@trabajogrado.com}
+    email: noreply@trabajogrado.com
     name: "Sistema Trabajo de Grado"
   retry:
     max-attempts: 3
     delay: 5000
 
-# RabbitMQ Queues
 rabbitmq:
   queues:
     notification: notification.queue
@@ -88,7 +58,6 @@ rabbitmq:
     notification: notification.routing.key
     email: notification.email.routing.key
 
-# Actuator
 management:
   endpoints:
     web:
@@ -106,13 +75,11 @@ management:
     readinessState:
       enabled: true
 
-# Logging
 logging:
   level:
     root: INFO
     co.unicauca.microservice: DEBUG
     org.springframework.web: INFO
     org.springframework.amqp: INFO
-    org.springframework.mail: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
