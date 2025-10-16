@@ -1,0 +1,53 @@
+[
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/identity/login"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NTY3OC05MGFiLWNkZWYtMTIzNC01Njc4OTBhYmNkZWYiLCJyb2xlIjoiRE9DRU5URSIsImVtYWlsIjoiZG9jZW50ZUB1bml2ZXJzaWRhZC5jb20iLCJzdWIiOiIxMjM0NTY3OC05MGFiLWNkZWYtMTIzNC01Njc4OTBhYmNkZWYiLCJleHAiOjk5OTk5OTk5OTl9.mock-signature",
+        "userId": "12345678-90ab-cdef-1234-567890abcdef",
+        "role": "DOCENTE",
+        "email": "docente@universidad.com"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/identity/verify-token"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "valid": true,
+        "userId": "12345678-90ab-cdef-1234-567890abcdef",
+        "role": "DOCENTE"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/health"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "status": "UP",
+        "service": "identity-service"
+      }
+    }
+  }
+]

@@ -1,0 +1,28 @@
+server:
+  port: 8082
+
+spring:
+  main:
+    web-application-type: servlet
+  datasource:
+    url: jdbc:postgresql://localhost:5432/submissiondb
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+submission:
+  exchange: submission.exchange
+  queue: submission.queue
+  routing-key: submission.created
+
+notification:
+  base-url: http://localhost:8083/api/notifications
+  timeout-ms: 3000

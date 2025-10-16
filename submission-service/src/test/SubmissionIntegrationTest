@@ -1,0 +1,61 @@
+package co.unicauca.comunicacionmicroservicios;
+
+import co.unicauca.comunicacionmicroservicios.dto.SubmissionRequest;
+import co.unicauca.comunicacionmicroservicios.dto.SubmissionResponse;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.*;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+public class SubmissionIntegrationTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15")
+            .withDatabaseName("submissiondb")
+            .withUsername("postgres")
+            .withPassword("postgres");
+
+    @Container
+    static RabbitMQContainer rabbit = new RabbitMQContainer("rabbitmq:3-management");
+
+    @DynamicPropertySource
+    static void props(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.rabbitmq.host", () -> rabbit.getHost());
+        registry.add("spring.rabbitmq.port", () -> rabbit.getAmqpPort());
+    }
+
+    @Autowired
+    private TestRestTemplate restTemplate;
+
+    @Test
+    void whenPostSubmission_thenCreatedAndResponseContainsId() {
+        SubmissionRequest req = new SubmissionRequest();
+        req.setTitulo("Titulo Test");
+        req.setResumen("Resumen...");
+        req.setAutoresEmails(List.of("est1@u.edu.co"));
+        req.setDirectorId(1);
+        req.setEstudiante1Id(2);
+
+        ResponseEntity<SubmissionResponse> resp = restTemplate.postForEntity("/api/submissions", req, SubmissionResponse.class);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().getProyectoId()).isNotNull();
+    }
+}

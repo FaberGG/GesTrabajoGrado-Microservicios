@@ -1,0 +1,33 @@
+# Configuración para tests
+server:
+  port: 0 # Puerto aleatorio para tests
+
+spring:
+  application:
+    name: gateway-service-test
+
+services:
+  identity:
+    url: http://localhost:8081
+  submission:
+    url: http://localhost:8082
+  notification:
+    url: http://localhost:8083
+
+jwt:
+  secret: test-secret-key-for-jwt-validation-minimum-256-bits
+  expiration: 86400000
+
+gateway:
+  security:
+    enforceRoleCheck: false
+    publicPaths:
+      - /api/identity/**
+      - /api/gateway/health
+      - /api/gateway/info
+      - /actuator/health
+
+logging:
+  level:
+    root: INFO
+    co.unicauca.gateway: DEBUG
