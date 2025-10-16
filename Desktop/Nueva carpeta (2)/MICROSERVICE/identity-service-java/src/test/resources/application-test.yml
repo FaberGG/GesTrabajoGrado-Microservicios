@@ -1,0 +1,30 @@
+spring:
+  # Configuración de la base de datos en memoria para pruebas
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  # Configuración JPA para pruebas
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+    show-sql: true
+
+  # Deshabilitar Flyway para pruebas
+  flyway:
+    enabled: false
+
+# JWT configuración para pruebas
+jwt:
+  secret: test-secret-key-very-secure-and-long-for-testing-purposes-only
+  expiration: 3600000
+
+# Deshabilitar rate limiting para pruebas
+rate-limiting:
+  enabled: false

@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: identity-postgres
+    environment:
+      POSTGRES_DB: identity_db
+      POSTGRES_USER: identity_user
+      POSTGRES_PASSWORD: identity_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - identity-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  identity-service:
+    build: .
+    container_name: identity-service
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DATABASE_URL: jdbc:postgresql://postgres:5432/identity_db
+      DB_USER: identity_user
+      DB_PASSWORD: identity_pass
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-MINIMUM-32-CHARACTERS
+      JWT_EXPIRATION: 3600000
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - identity-network
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  postgres_data:
+
+networks:
+  identity-network:
+    driver: bridge
