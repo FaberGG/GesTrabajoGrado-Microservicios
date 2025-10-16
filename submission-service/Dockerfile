@@ -1,7 +1,7 @@
 # Multi-stage build para optimizar tamaño de imagen
 
 # Etapa 1: Build
-FROM maven:3.9.5-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 
 WORKDIR /app
 
@@ -23,31 +23,37 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Instalar wget para healthcheck
+# Instalar wget ANTES de crear usuario
 RUN apk add --no-cache wget
 
 # Crear usuario no-root por seguridad
 RUN addgroup -S spring && adduser -S spring -G spring
 
-# Crear directorio para uploads (si es necesario)
-RUN mkdir -p /app/uploads && chown -R spring:spring /app/uploads
+# Crear directorio y cambiar ownership DESPUÉS de crear usuario
+RUN mkdir -p /app/uploads && chown -R spring:spring /app
 
+# Copiar JAR desde etapa de build y cambiar ownership
+COPY --from=builder --chown=spring:spring /app/target/*.jar app.jar
+
+# Cambiar a usuario no-root DESPUÉS de configurar permisos
 USER spring:spring
-
-# Copiar JAR desde etapa de build
-COPY --from=build /app/target/*.jar app.jar
 
 # Exponer puerto del submission service
 EXPOSE 8082
 
 # Variables de entorno por defecto (pueden sobrescribirse en docker-compose)
-ENV JAVA_OPTS="-Xms256m -Xmx512m" \
-    SPRING_PROFILES_ACTIVE="docker" \
+ENV SPRING_PROFILES_ACTIVE="prod" \
     SERVER_PORT="8082"
 
 # Health check para Docker
-HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health || exit 1
 
-# Comando de inicio
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+#Usar optimizaciones JVM más robustas
+ENTRYPOINT ["java", \
+  "-XX:+UseContainerSupport", \
+  "-XX:MaxRAMPercentage=75.0", \
+  "-XX:InitialRAMPercentage=50.0", \
+  "-Djava.security.egd=file:/dev/./urandom", \
+  "-jar", \
+  "app.jar"]

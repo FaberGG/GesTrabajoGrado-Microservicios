@@ -4,7 +4,7 @@ services:
   # API Gateway - Punto de entrada único al sistema
   gateway:
     build:
-      context: ./gateway
+      context: .
       dockerfile: Dockerfile
     container_name: gateway-service
     restart: unless-stopped
@@ -53,7 +53,7 @@ services:
   # Identity Service - Autenticación y gestión de usuarios
   identity:
     build:
-      context: ./identity-service
+      context: ../identity-service
       dockerfile: Dockerfile
     container_name: identity-service
     restart: unless-stopped
@@ -93,7 +93,7 @@ services:
   # Submission Service - Gestión de entregas y documentos
   submission:
     build:
-      context: ./submission-service
+      context: ../submission-service
       dockerfile: Dockerfile
     container_name: submission-service
     restart: unless-stopped
@@ -136,7 +136,7 @@ services:
   # Notification Service - Envío de notificaciones
   notification:
     build:
-      context: ./notification-service
+      context: ../notification-service
       dockerfile: Dockerfile
     container_name: notification-service
     restart: unless-stopped

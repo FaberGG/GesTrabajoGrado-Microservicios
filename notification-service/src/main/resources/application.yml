@@ -2,7 +2,6 @@ spring:
   application:
     name: notification-service
 
-  # Database Configuration (JPA no está en el POM, si usas DB agrega spring-boot-starter-data-jpa)
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/notification_db}
     username: ${DATABASE_USERNAME:noti_user}
