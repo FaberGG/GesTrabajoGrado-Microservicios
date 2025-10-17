@@ -163,7 +163,7 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
     volumes:
-      - notification-logs:/app/logs
+      - ./notification-service/logs:/app/logs
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -301,6 +301,4 @@ volumes:
   postgres-submission-data:
     driver: local
   postgres-notification-data:
-    driver: local
-  notification-logs:
     driver: local
