@@ -14,9 +14,9 @@ import org.springframework.context.annotation.Configuration;
  * Configuración de rutas del API Gateway.
  *
  * Define el enrutamiento de peticiones hacia los microservicios backend:
- * - /api/identity/** → identity-service (público)
- * - /api/submission/** → submission-service (protegido con JWT)
- * - /api/notification/** → notification-service (protegido con JWT)
+ * - /api/auth/** → identity-service (público)
+ * - /api/submissions/** → submission-service (protegido con JWT)
+ * - /api/notifications/** → notification-service (protegido con JWT)
  *
  * Aplica filtros en el orden:
  * 1. RequestResponseLoggingFilter - logging de peticiones
@@ -55,7 +55,7 @@ public class RouteConfig {
      * Define las rutas del gateway y sus filtros asociados.
      *
      * Rutas públicas (identity) no requieren JWT.
-     * Rutas protegidas (submission, notification) validan JWT y roles.
+     * Rutas protegidas (submissions, notifications) validan JWT y roles.
      */
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
@@ -70,13 +70,25 @@ public class RouteConfig {
                                         .setFallbackUri("forward:/api/gateway/fallback/identity")))
                         .uri(identityServiceUrl))
 
+                // Ruta alternativa para Identity Service (sin prefijo /identity)
+                .route("identity-service-shortcut", r -> r
+                        .path("/api/auth/**")
+                        .filters(f -> f
+                                .filter(loggingFilter.apply(new RequestResponseLoggingFilter.Config()))
+                                .rewritePath("/api/auth/(?<segment>.*)", "/api/auth/${segment}")
+                                .circuitBreaker(config -> config
+                                        .setName("identityService")
+                                        .setFallbackUri("forward:/api/gateway/fallback/identity")))
+                        .uri(identityServiceUrl))
+
                 // Ruta hacia Submission Service (PROTEGIDA - requiere JWT)
                 .route("submission-service", r -> r
-                        .path("/api/submission/**")
+                        .path("/api/submissions/**")
                         .filters(f -> f
                                 .filter(loggingFilter.apply(new RequestResponseLoggingFilter.Config()))
                                 .filter(jwtGatewayFilter.apply(new JwtGatewayFilter.Config()))
                                 .filter(roleFilter.apply(new RoleFilter.Config()))
+                                .rewritePath("/api/submissions/(?<segment>.*)", "/api/submissions/${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("submissionService")
                                         .setFallbackUri("forward:/api/gateway/fallback/submission")))
@@ -84,11 +96,12 @@ public class RouteConfig {
 
                 // Ruta hacia Notification Service (PROTEGIDA - requiere JWT)
                 .route("notification-service", r -> r
-                        .path("/api/notification/**")
+                        .path("/api/notifications/**")
                         .filters(f -> f
                                 .filter(loggingFilter.apply(new RequestResponseLoggingFilter.Config()))
                                 .filter(jwtGatewayFilter.apply(new JwtGatewayFilter.Config()))
                                 .filter(roleFilter.apply(new RoleFilter.Config()))
+                                .rewritePath("/api/notifications(?<segment>/.*)?", "/notifications${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("notificationService")
                                         .setFallbackUri("forward:/api/gateway/fallback/notification")))

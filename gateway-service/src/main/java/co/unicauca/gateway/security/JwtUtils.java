@@ -1,16 +1,15 @@
 package co.unicauca.gateway.security;
 
-
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.JWTVerifier;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.DecodedJWT;
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,9 +20,9 @@ import java.util.Map;
  * Responsabilidades:
  * - Validar la firma del token usando el secret configurado
  * - Verificar que el token no haya expirado
- * - Extraer claims del payload: userId, role, email
+ * - Extraer claims del payload: userId, rol (sin 'e'), email
  *
- * Usa la librería Auth0 java-jwt para el procesamiento de tokens.
+ * Usa la librería io.jsonwebtoken (JJWT) - LA MISMA que identity-service.
  *
  * NOTA DE SEGURIDAD:
  * - No loguear el token completo en producción
@@ -39,13 +38,14 @@ public class JwtUtils {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    private final Algorithm algorithm;
-    private final JWTVerifier verifier;
-
-    public JwtUtils(@Value("${jwt.secret}") String jwtSecret) {
-        this.jwtSecret = jwtSecret;
-        this.algorithm = Algorithm.HMAC256(jwtSecret);
-        this.verifier = JWT.require(algorithm).build();
+    /**
+     * Obtiene la clave de firma para JWT
+     *
+     * @return SecretKey para firma de tokens
+     */
+    private SecretKey getSigningKey() {
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     /**
@@ -56,19 +56,27 @@ public class JwtUtils {
      */
     public boolean validateToken(String token) {
         try {
-            DecodedJWT jwt = verifier.verify(token);
+            Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token);
 
-            // Verificar expiración explícitamente
-            Date expiresAt = jwt.getExpiresAt();
-            if (expiresAt != null && expiresAt.before(new Date())) {
-                log.warn("Token expirado. Expira en: {}", expiresAt);
-                return false;
-            }
-
-            log.debug("Token validado correctamente para subject: {}", jwt.getSubject());
+            log.debug("Token validado correctamente");
             return true;
-        } catch (JWTVerificationException e) {
-            log.error("Error al validar token JWT: {}", e.getMessage());
+        } catch (SignatureException e) {
+            log.error("Firma JWT inválida: {}", e.getMessage());
+            return false;
+        } catch (MalformedJwtException e) {
+            log.error("Token JWT malformado: {}", e.getMessage());
+            return false;
+        } catch (ExpiredJwtException e) {
+            log.error("Token JWT expirado: {}", e.getMessage());
+            return false;
+        } catch (UnsupportedJwtException e) {
+            log.error("Token JWT no soportado: {}", e.getMessage());
+            return false;
+        } catch (IllegalArgumentException e) {
+            log.error("Claims vacías en el token JWT: {}", e.getMessage());
             return false;
         }
     }
@@ -77,10 +85,10 @@ public class JwtUtils {
      * Extrae los claims principales del token JWT.
      *
      * Claims esperados:
-     * - userId: identificador único del usuario (UUID o string)
-     * - role: rol del usuario (DOCENTE, ESTUDIANTE, COORDINADOR, JEFE_DEPARTAMENTO)
-     * - email: correo electrónico del usuario (opcional)
-     * - sub: subject del JWT (típicamente el userId)
+     * - userId: identificador único del usuario (Long)
+     * - rol: rol del usuario (DOCENTE, ESTUDIANTE, COORDINADOR) - SIN 'e'
+     * - email: correo electrónico del usuario (subject del JWT)
+     * - programa: programa académico del usuario
      *
      * @param token El token JWT
      * @return Map con los claims extraídos, o Map vacío si el token es inválido
@@ -89,36 +97,40 @@ public class JwtUtils {
         Map<String, String> claims = new HashMap<>();
 
         try {
-            DecodedJWT jwt = verifier.verify(token);
+            Claims jwtClaims = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
 
-            // Subject (típicamente el userId)
-            String subject = jwt.getSubject();
-            if (subject != null) {
-                claims.put("userId", subject);
-            }
-
-            // Claim personalizado: userId (puede ser diferente al subject)
-            String userId = jwt.getClaim("userId").asString();
-            if (userId != null) {
-                claims.put("userId", userId);
-            }
-
-            // Claim personalizado: role
-            String role = jwt.getClaim("role").asString();
-            if (role != null) {
-                claims.put("role", role);
-            }
-
-            // Claim personalizado: email
-            String email = jwt.getClaim("email").asString();
+            // Subject (email del usuario)
+            String email = jwtClaims.getSubject();
             if (email != null) {
                 claims.put("email", email);
             }
 
-            log.debug("Claims extraídos del token: userId={}, role={}",
+            // Claim personalizado: userId
+            Object userIdObj = jwtClaims.get("userId");
+            if (userIdObj != null) {
+                claims.put("userId", String.valueOf(userIdObj));
+            }
+
+            // Claim personalizado: rol (SIN 'e' - importante!)
+            Object rolObj = jwtClaims.get("rol");
+            if (rolObj != null) {
+                claims.put("role", String.valueOf(rolObj)); // Guardamos como "role" para compatibilidad interna
+            }
+
+            // Claim personalizado: programa
+            Object programaObj = jwtClaims.get("programa");
+            if (programaObj != null) {
+                claims.put("programa", String.valueOf(programaObj));
+            }
+
+            log.debug("Claims extraídos del token: userId={}, rol={}",
                     claims.get("userId"), claims.get("role"));
 
-        } catch (JWTVerificationException e) {
+        } catch (JwtException e) {
             log.error("Error al extraer claims del token: {}", e.getMessage());
         }
 

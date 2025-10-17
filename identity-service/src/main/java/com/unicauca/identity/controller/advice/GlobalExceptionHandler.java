@@ -160,9 +160,14 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGlobalException(Exception ex, WebRequest request) {
-        log.error("Error no controlado en ruta {}: {}", request.getDescription(false), ex.getMessage(), ex);
+        // SIEMPRE loguear el error completo con stack trace para diagnóstico
+        log.error("Error no controlado en ruta {}: {} - Tipo: {}",
+                  request.getDescription(false),
+                  ex.getMessage(),
+                  ex.getClass().getName(),
+                  ex);
 
-        // En desarrollo, mostrar más detalles del error
+        // En desarrollo/debug, mostrar más detalles del error en la respuesta
         String detailedMessage = "Ha ocurrido un error inesperado. Por favor, inténtalo más tarde.";
         if (log.isDebugEnabled()) {
             detailedMessage = ex.getClass().getSimpleName() + ": " + ex.getMessage();

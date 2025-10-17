@@ -1,10 +1,13 @@
 package co.unicauca.gateway.security;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 
@@ -25,13 +28,16 @@ class JwtUtilsTest {
 
     private JwtUtils jwtUtils;
     private String secretKey;
-    private Algorithm algorithm;
+    private SecretKey signingKey;
 
     @BeforeEach
     void setUp() {
         secretKey = "test-secret-key-for-jwt-validation-minimum-256-bits";
-        algorithm = Algorithm.HMAC256(secretKey);
-        jwtUtils = new JwtUtils(secretKey);
+        signingKey = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+
+        // Crear instancia de JwtUtils e inyectar el secret usando ReflectionTestUtils
+        jwtUtils = new JwtUtils();
+        ReflectionTestUtils.setField(jwtUtils, "jwtSecret", secretKey);
     }
 
     /**
@@ -40,13 +46,15 @@ class JwtUtilsTest {
     @Test
     void testValidateToken_ValidToken_ReturnsTrue() {
         // Crear un token válido con expiración futura
-        String token = JWT.create()
-                .withSubject("test-user-id")
-                .withClaim("userId", "12345678-90ab-cdef-1234-567890abcdef")
-                .withClaim("role", "DOCENTE")
-                .withClaim("email", "test@universidad.com")
-                .withExpiresAt(new Date(System.currentTimeMillis() + 86400000)) // +24h
-                .sign(algorithm);
+        String token = Jwts.builder()
+                .subject("test@universidad.com")
+                .claim("userId", 123)
+                .claim("rol", "DOCENTE")
+                .claim("programa", "INGENIERIA_SISTEMAS")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 86400000)) // +24h
+                .signWith(signingKey)
+                .compact();
 
         boolean isValid = jwtUtils.validateToken(token);
 
@@ -59,12 +67,14 @@ class JwtUtilsTest {
     @Test
     void testValidateToken_ExpiredToken_ReturnsFalse() {
         // Crear un token expirado
-        String token = JWT.create()
-                .withSubject("test-user-id")
-                .withClaim("userId", "12345678-90ab-cdef-1234-567890abcdef")
-                .withClaim("role", "DOCENTE")
-                .withExpiresAt(new Date(System.currentTimeMillis() - 1000)) // Expirado hace 1 segundo
-                .sign(algorithm);
+        String token = Jwts.builder()
+                .subject("test@universidad.com")
+                .claim("userId", 123)
+                .claim("rol", "DOCENTE")
+                .issuedAt(new Date(System.currentTimeMillis() - 2000))
+                .expiration(new Date(System.currentTimeMillis() - 1000)) // Expirado hace 1 segundo
+                .signWith(signingKey)
+                .compact();
 
         boolean isValid = jwtUtils.validateToken(token);
 
@@ -77,13 +87,14 @@ class JwtUtilsTest {
     @Test
     void testValidateToken_InvalidSignature_ReturnsFalse() {
         // Crear un token con una clave diferente
-        Algorithm wrongAlgorithm = Algorithm.HMAC256("wrong-secret-key");
-        String token = JWT.create()
-                .withSubject("test-user-id")
-                .withClaim("userId", "12345678-90ab-cdef-1234-567890abcdef")
-                .withClaim("role", "DOCENTE")
-                .withExpiresAt(new Date(System.currentTimeMillis() + 86400000))
-                .sign(wrongAlgorithm);
+        SecretKey wrongKey = Keys.hmacShaKeyFor("wrong-secret-key-that-is-long-enough-for-hmac-sha256".getBytes(StandardCharsets.UTF_8));
+        String token = Jwts.builder()
+                .subject("test@universidad.com")
+                .claim("userId", 123)
+                .claim("rol", "DOCENTE")
+                .expiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(wrongKey)
+                .compact();
 
         boolean isValid = jwtUtils.validateToken(token);
 
@@ -95,24 +106,27 @@ class JwtUtilsTest {
      */
     @Test
     void testExtractClaims_ValidToken_ReturnsClaims() {
-        String userId = "12345678-90ab-cdef-1234-567890abcdef";
-        String role = "DOCENTE";
         String email = "docente@universidad.com";
+        Integer userId = 123;
+        String rol = "DOCENTE";
+        String programa = "INGENIERIA_SISTEMAS";
 
-        String token = JWT.create()
-                .withSubject(userId)
-                .withClaim("userId", userId)
-                .withClaim("role", role)
-                .withClaim("email", email)
-                .withExpiresAt(new Date(System.currentTimeMillis() + 86400000))
-                .sign(algorithm);
+        String token = Jwts.builder()
+                .subject(email)
+                .claim("userId", userId)
+                .claim("rol", rol)
+                .claim("programa", programa)
+                .expiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(signingKey)
+                .compact();
 
         Map<String, String> claims = jwtUtils.extractClaims(token);
 
         assertNotNull(claims, "Los claims no deberían ser null");
-        assertEquals(userId, claims.get("userId"), "El userId debería coincidir");
-        assertEquals(role, claims.get("role"), "El role debería coincidir");
+        assertEquals(String.valueOf(userId), claims.get("userId"), "El userId debería coincidir");
+        assertEquals(rol, claims.get("role"), "El role debería coincidir");
         assertEquals(email, claims.get("email"), "El email debería coincidir");
+        assertEquals(programa, claims.get("programa"), "El programa debería coincidir");
     }
 
     /**
@@ -168,18 +182,19 @@ class JwtUtilsTest {
      */
     @Test
     void testGetUserId_ValidToken_ReturnsUserId() {
-        String userId = "12345678-90ab-cdef-1234-567890abcdef";
+        Integer userId = 123;
 
-        String token = JWT.create()
-                .withSubject(userId)
-                .withClaim("userId", userId)
-                .withClaim("role", "DOCENTE")
-                .withExpiresAt(new Date(System.currentTimeMillis() + 86400000))
-                .sign(algorithm);
+        String token = Jwts.builder()
+                .subject("test@universidad.com")
+                .claim("userId", userId)
+                .claim("rol", "DOCENTE")
+                .expiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(signingKey)
+                .compact();
 
         String extractedUserId = jwtUtils.getUserId(token);
 
-        assertEquals(userId, extractedUserId, "El userId extraído debería coincidir");
+        assertEquals(String.valueOf(userId), extractedUserId, "El userId extraído debería coincidir");
     }
 
     /**
@@ -187,18 +202,19 @@ class JwtUtilsTest {
      */
     @Test
     void testGetRole_ValidToken_ReturnsRole() {
-        String role = "DOCENTE";
+        String rol = "DOCENTE";
 
-        String token = JWT.create()
-                .withSubject("test-user")
-                .withClaim("userId", "12345678-90ab-cdef-1234-567890abcdef")
-                .withClaim("role", role)
-                .withExpiresAt(new Date(System.currentTimeMillis() + 86400000))
-                .sign(algorithm);
+        String token = Jwts.builder()
+                .subject("test@universidad.com")
+                .claim("userId", 123)
+                .claim("rol", rol)
+                .expiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(signingKey)
+                .compact();
 
         String extractedRole = jwtUtils.getRole(token);
 
-        assertEquals(role, extractedRole, "El role extraído debería coincidir");
+        assertEquals(rol, extractedRole, "El role extraído debería coincidir");
     }
 
     /**
@@ -206,15 +222,15 @@ class JwtUtilsTest {
      */
     @Test
     void testGetEmail_ValidToken_ReturnsEmail() {
-        String email = "docente@universidad.com";
+        String email = "test@universidad.com";
 
-        String token = JWT.create()
-                .withSubject("test-user")
-                .withClaim("userId", "12345678-90ab-cdef-1234-567890abcdef")
-                .withClaim("role", "DOCENTE")
-                .withClaim("email", email)
-                .withExpiresAt(new Date(System.currentTimeMillis() + 86400000))
-                .sign(algorithm);
+        String token = Jwts.builder()
+                .subject(email)
+                .claim("userId", 123)
+                .claim("rol", "DOCENTE")
+                .expiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(signingKey)
+                .compact();
 
         String extractedEmail = jwtUtils.getEmail(token);
 

@@ -44,6 +44,9 @@ gateway:
     publicPaths:
       - /api/identity/auth/login
       - /api/identity/auth/register
+      - /api/auth/login
+      - /api/auth/register
+      - /api/auth/roles
       - /api/gateway/health
       - /api/gateway/info
       - /actuator/health
@@ -76,10 +79,11 @@ management:
 logging:
   level:
     root: INFO
-    co.unicauca.gateway: INFO
-    org.springframework.web: INFO
-    org.springframework.security: WARN
+    co.unicauca.gateway: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
     org.springframework.amqp: WARN
+    org.springframework.cloud.gateway: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

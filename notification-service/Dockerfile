@@ -20,6 +20,9 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# Instalar wget ANTES de crear usuario (para health checks)
+RUN apk add --no-cache wget
+
 # Crear usuario no-root para seguridad
 RUN addgroup -S spring && adduser -S spring -G spring
 

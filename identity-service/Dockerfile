@@ -15,6 +15,9 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# Instalar wget ANTES de crear usuario (para health checks)
+RUN apk add --no-cache wget
+
 # Copiar el JAR construido desde el builder
 COPY --from=builder /app/target/*.jar app.jar
 
@@ -22,11 +25,12 @@ COPY --from=builder /app/target/*.jar app.jar
 RUN addgroup -g 1001 -S spring && \
     adduser -S spring -u 1001
 
-# Crear directorio de logs
+# Crear directorio de logs y cambiar ownership
 RUN mkdir -p /app/logs && chown -R spring:spring /app
 
 USER spring
 
-EXPOSE 8080
+# Exponer puerto 8081 (para producción con docker-compose raíz)
+EXPOSE 8081
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
