@@ -26,10 +26,14 @@ RUN apk add --no-cache wget
 # Crear usuario no-root para seguridad
 RUN addgroup -S spring && adduser -S spring -G spring
 
+# Crear directorio de logs y darle permisos al usuario spring
+RUN mkdir -p /app/logs /app/logs/archive && \
+    chown -R spring:spring /app/logs
+
 # Copiar el JAR desde la etapa de build
 COPY --from=builder /app/target/*.jar app.jar
 
-# Cambiar ownership
+# Cambiar ownership del JAR
 RUN chown spring:spring app.jar
 
 # Cambiar a usuario no-root
