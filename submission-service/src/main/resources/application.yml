@@ -26,3 +26,13 @@ submission:
 notification:
   base-url: http://localhost:8083/api/notifications
   timeout-ms: 3000
+
+# Configuración de Logging
+logging:
+  level:
+    root: INFO
+    co.unicauca.comunicacionmicroservicios: DEBUG
+    org.springframework.amqp: DEBUG
+    org.springframework.web.reactive.function.client: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
