@@ -25,9 +25,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-        jdbc:
-          lob:
-            non_contextual_creation: true
+        jdbc.lob.non_contextual_creation: true
 
   rabbitmq:
     host: ${RABBITMQ_HOST:rabbitmq}
@@ -40,9 +38,15 @@ jwt:
   expiration: 86400000
 
 submission:
-  exchange: submission.exchange
-  queue: submission.queue
-  routing-key: submission.created
+  exchanges:
+    formato-a: formato-a-exchange
+    anteproyecto: anteproyecto-exchange
+    proyecto: proyecto-exchange
+  routing:
+    formato-a-enviado: formato-a.enviado
+    formato-a-reenviado: formato-a.reenviado
+    anteproyecto-enviado: anteproyecto.enviado
+    proyecto-rechazo-def: proyecto.rechazado-definitivamente
 
 notification:
   base-url: http://notification:8083/api/notifications
@@ -57,8 +61,7 @@ logging:
     root: WARN
     co.unicauca: INFO
     org.hibernate.SQL: DEBUG
-  file:
-    name: logs/submission-service.log
+  file.name: logs/submission-service.log
 
 management:
   endpoints:
@@ -69,10 +72,7 @@ management:
   endpoint:
     health:
       show-details: always
-      probes:
-        enabled: true
+      probes.enabled: true
   health:
-    livenessState:
-      enabled: true
-    readinessState:
-      enabled: true
+    livenessState.enabled: true
+    readinessState.enabled: true

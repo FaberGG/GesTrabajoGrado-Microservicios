@@ -1,82 +1,70 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package co.unicauca.comunicacionmicroservicios.config;
 
-import org.springframework.amqp.core.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Exchange;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
-import org.springframework.context.annotation.*;
 import org.springframework.beans.factory.annotation.Value;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 /**
- * Configuración de RabbitMQ para comunicación ASÍNCRONA (Escenario 1)
+ * Configuración de RabbitMQ para publicar eventos de dominio desde Submission:
+ * - formato-a-exchange        (routing: formato-a.enviado, formato-a.reenviado)
+ * - anteproyecto-exchange     (routing: anteproyecto.enviado)
+ * - proyecto-exchange         (routing: proyecto.rechazado-definitivamente)
  *
- * Arquitectura:
- * - Exchange: submission.exchange (tipo Direct)
- * - Queue: submission.queue
- * - Routing Key: submission.created
- *
- * Cuando Submission crea un anteproyecto, publica un mensaje en el exchange.
- * El mensaje es enrutado a la cola submission.queue mediante la routing key.
- * El servicio de Notification consume mensajes de esta cola de manera asíncrona.
+ * Las colas deben declararse en los servicios consumidores (p.ej. notification-service).
  */
 @Configuration
 public class RabbitConfig {
 
-  @Value("${submission.exchange}")
-  private String exchangeName;
+    // Exchanges
+    @Value("${submission.exchanges.formato-a:formato-a-exchange}")
+    private String formatoAExchangeName;
 
-  @Value("${submission.queue}")
-  private String queueName;
+    @Value("${submission.exchanges.anteproyecto:anteproyecto-exchange}")
+    private String anteproyectoExchangeName;
 
-  @Value("${submission.routing-key}")
-  private String routingKey;
+    @Value("${submission.exchanges.proyecto:proyecto-exchange}")
+    private String proyectoExchangeName;
 
-  /**
-   * Define el exchange de tipo Direct para publicar eventos de submission
-   */
-  @Bean
-  public Exchange submissionExchange() {
-    return ExchangeBuilder.directExchange(exchangeName).durable(true).build();
-  }
+    // Routing keys
+    @Value("${submission.routing.formato-a-enviado:formato-a.enviado}")
+    public String rkFormatoAEnviado;
 
-  /**
-   * Define la cola donde se almacenarán los mensajes de submission
-   * Es durable para persistir mensajes aunque RabbitMQ se reinicie
-   */
-  @Bean
-  public Queue submissionQueue() {
-    return QueueBuilder.durable(queueName).build();
-  }
+    @Value("${submission.routing.formato-a-reenviado:formato-a.reenviado}")
+    public String rkFormatoAReenviado;
 
-  /**
-   * Vincula la cola con el exchange mediante la routing key
-   * Los mensajes publicados con esta routing key llegarán a la cola
-   */
-  @Bean
-  public Binding binding(Queue submissionQueue, Exchange submissionExchange) {
-    return BindingBuilder.bind(submissionQueue).to(submissionExchange).with(routingKey).noargs();
-  }
+    @Value("${submission.routing.anteproyecto-enviado:anteproyecto.enviado}")
+    public String rkAnteproyectoEnviado;
 
-  /**
-   * Conversor JSON para serializar/deserializar mensajes automáticamente
-   */
-  @Bean
-  public Jackson2JsonMessageConverter jackson2JsonMessageConverter(ObjectMapper objectMapper) {
-    return new Jackson2JsonMessageConverter(objectMapper);
-  }
+    @Value("${submission.routing.proyecto-rechazo-def:proyecto.rechazado-definitivamente}")
+    public String rkProyectoRechazoDef;
 
-  /**
-   * Template para publicar mensajes en RabbitMQ con conversión JSON automática
-   */
-  @Bean
-  public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, Jackson2JsonMessageConverter converter) {
-    RabbitTemplate rt = new RabbitTemplate(connectionFactory);
-    rt.setMessageConverter(converter);
-    return rt;
-  }
+    // Exchanges como beans (sin colas/bindings aquí)
+    @Bean
+    public Exchange formatoAExchange() { return new DirectExchange(formatoAExchangeName, true, false); }
+
+    @Bean
+    public Exchange anteproyectoExchange() { return new DirectExchange(anteproyectoExchangeName, true, false); }
+
+    @Bean
+    public Exchange proyectoExchange() { return new DirectExchange(proyectoExchangeName, true, false); }
+
+    // Converter JSON
+    @Bean
+    public Jackson2JsonMessageConverter jackson2JsonMessageConverter(ObjectMapper objectMapper) {
+        return new Jackson2JsonMessageConverter(objectMapper);
+    }
+
+    // RabbitTemplate con converter JSON
+    @Bean
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, Jackson2JsonMessageConverter converter) {
+        RabbitTemplate rt = new RabbitTemplate(connectionFactory);
+        rt.setMessageConverter(converter);
+        return rt;
+    }
 }

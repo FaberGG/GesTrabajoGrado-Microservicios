@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pom.xml .
 
 # Descargar dependencias (se cachea si pom.xml no cambia)
-RUN mvn dependency:go-offline -B
+RUN mvn -B -DskipTests clean package
 
 # Copiar código fuente
 COPY src ./src

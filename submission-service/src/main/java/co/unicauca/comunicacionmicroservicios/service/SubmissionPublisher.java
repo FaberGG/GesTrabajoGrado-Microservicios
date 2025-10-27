@@ -1,49 +1,59 @@
 package co.unicauca.comunicacionmicroservicios.service;
 
-import co.unicauca.comunicacionmicroservicios.dto.SubmissionMessage;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-/**
- * Publicador de eventos para comunicación ASÍNCRONA mediante RabbitMQ
- * Publica mensajes en el exchange configurado para que sean consumidos
- * por el servicio de notificaciones u otros consumidores interesados
- */
+/** Publicador de eventos de dominio desde Submission. */
 @Service
 @RequiredArgsConstructor
 public class SubmissionPublisher {
 
-    private static final Logger logger = LoggerFactory.getLogger(SubmissionPublisher.class);
+    private static final Logger log = LoggerFactory.getLogger(SubmissionPublisher.class);
     private final RabbitTemplate rabbitTemplate;
 
-    @Value("${submission.exchange}")
-    private String exchange;
+    // Exchanges
+    @Value("${submission.exchanges.formato-a:formato-a-exchange}")
+    private String formatoAExchange;
 
-    @Value("${submission.routing-key}")
-    private String routingKey;
+    @Value("${submission.exchanges.anteproyecto:anteproyecto-exchange}")
+    private String anteproyectoExchange;
 
-    /**
-     * Publica un mensaje genérico en RabbitMQ
-     * @param payload Objeto a publicar
-     */
-    public void publish(Object payload) {
-        logger.info("Publicando mensaje en RabbitMQ - Exchange: {}, RoutingKey: {}", exchange, routingKey);
-        rabbitTemplate.convertAndSend(exchange, routingKey, payload);
-        logger.info("Mensaje publicado exitosamente");
+    @Value("${submission.exchanges.proyecto:proyecto-exchange}")
+    private String proyectoExchange;
+
+    // Routing keys
+    @Value("${submission.routing.formato-a-enviado:formato-a.enviado}")
+    private String rkFormatoAEnviado;
+
+    @Value("${submission.routing.formato-a-reenviado:formato-a.reenviado}")
+    private String rkFormatoAReenviado;
+
+    @Value("${submission.routing.anteproyecto-enviado:anteproyecto.enviado}")
+    private String rkAnteproyectoEnviado;
+
+    @Value("${submission.routing.proyecto-rechazo-def:proyecto.rechazado-definitivamente}")
+    private String rkProyectoRechazoDef;
+
+    public void publicarFormatoAEnviado(Object payload) {
+        publish(formatoAExchange, rkFormatoAEnviado, payload);
+    }
+    public void publicarFormatoAReenviado(Object payload) {
+        publish(formatoAExchange, rkFormatoAReenviado, payload);
+    }
+    public void publicarAnteproyectoEnviado(Object payload) {
+        publish(anteproyectoExchange, rkAnteproyectoEnviado, payload);
+    }
+    public void publicarProyectoRechazoDefinitivo(Object payload) {
+        publish(proyectoExchange, rkProyectoRechazoDef, payload);
     }
 
-    /**
-     * Publica un mensaje de tipo SubmissionMessage en RabbitMQ
-     * @param msg Mensaje con información del anteproyecto
-     */
-    public void publish(SubmissionMessage msg) {
-        logger.info("Publicando SubmissionMessage - ProyectoID: {}, Título: {}",
-                    msg.getProyectoId(), msg.getTitulo());
-        rabbitTemplate.convertAndSend(exchange, routingKey, msg);
-        logger.info("SubmissionMessage publicado exitosamente");
+    private void publish(String exchange, String routingKey, Object payload) {
+        log.info("Publicando evento: exchange={}, routingKey={}, payloadClass={}",
+                exchange, routingKey, payload != null ? payload.getClass().getSimpleName() : "null");
+        rabbitTemplate.convertAndSend(exchange, routingKey, payload);
     }
 }
