@@ -1,0 +1,4 @@
+edu\unicauca\progresstrackingservice\ProgressTrackingApplication.class
+edu\unicauca\progresstracking\controller\ProgressController.class
+edu\unicauca\progresstrackingservice\model\ProgressEvent.class
+edu\unicauca\progresstrackingservice\service\ProgressService.class
