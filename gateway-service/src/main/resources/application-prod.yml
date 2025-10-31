@@ -31,6 +31,8 @@ services:
     url: ${SUBMISSION_URL:http://submission:8082}
   notification:
     url: ${NOTIFICATION_URL:http://notification:8083}
+  review:
+    url: ${REVIEW_URL:http://review:8084}
 
 # JWT Configuration
 jwt:

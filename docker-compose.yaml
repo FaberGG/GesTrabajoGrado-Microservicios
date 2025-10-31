@@ -17,6 +17,7 @@ services:
       - IDENTITY_URL=http://identity:8081
       - SUBMISSION_URL=http://submission:8082
       - NOTIFICATION_URL=http://notification:8083
+      - REVIEW_URL=http://review:8084
       - GATEWAY_ENFORCE_ROLE_CHECK=true
       - GATEWAY_CONNECT_TIMEOUT=5000
       - GATEWAY_READ_TIMEOUT=30000
@@ -30,6 +31,8 @@ services:
       submission:
         condition: service_healthy
       notification:
+        condition: service_healthy
+      review:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -186,6 +189,52 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  # Review Service - Evaluación académica con Template Method
+  review:
+    build:
+      context: ./review-service
+      dockerfile: Dockerfile
+    container_name: review-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_PORT=8084
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=jdbc:postgresql://postgres-review:5432/review_db
+      - DATABASE_USERNAME=${REVIEW_DB_USER}
+      - DATABASE_PASSWORD=${REVIEW_DB_PASS}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+      - SUBMISSION_URL=http://submission:8082
+      - IDENTITY_URL=http://identity:8081
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-review:
+        condition: service_healthy
+      submission:
+        condition: service_healthy
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
   # RabbitMQ - Message Broker para comunicación asíncrona
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -285,6 +334,28 @@ services:
       retries: 5
       start_period: 10s
 
+  # Base de datos PostgreSQL para Review Service
+  postgres-review:
+    image: postgres:15-alpine
+    container_name: postgres-review
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=review_db
+      - POSTGRES_USER=${REVIEW_DB_USER}
+      - POSTGRES_PASSWORD=${REVIEW_DB_PASS}
+    volumes:
+      - postgres-review-data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   trabajo-grado-network:
     driver: bridge
@@ -301,4 +372,6 @@ volumes:
   postgres-submission-data:
     driver: local
   postgres-notification-data:
+    driver: local
+  postgres-review-data:
     driver: local

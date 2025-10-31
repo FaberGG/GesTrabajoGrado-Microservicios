@@ -39,6 +39,9 @@ public class RouteConfig {
     @Value("${services.notification.url}")
     private String notificationServiceUrl;
 
+    @Value("${services.review.url}")
+    private String reviewServiceUrl;
+
     private final JwtGatewayFilter jwtGatewayFilter;
     private final RoleFilter roleFilter;
     private final RequestResponseLoggingFilter loggingFilter;
@@ -106,6 +109,19 @@ public class RouteConfig {
                                         .setName("notificationService")
                                         .setFallbackUri("forward:/api/gateway/fallback/notification")))
                         .uri(notificationServiceUrl))
+
+                // Ruta hacia Review Service (PROTEGIDA - requiere JWT)
+                .route("review-service", r -> r
+                        .path("/api/review/**")
+                        .filters(f -> f
+                                .filter(loggingFilter.apply(new RequestResponseLoggingFilter.Config()))
+                                .filter(jwtGatewayFilter.apply(new JwtGatewayFilter.Config()))
+                                .filter(roleFilter.apply(new RoleFilter.Config()))
+                                .rewritePath("/api/review/(?<segment>.*)", "/api/review/${segment}")
+                                .circuitBreaker(config -> config
+                                        .setName("reviewService")
+                                        .setFallbackUri("forward:/api/gateway/fallback/review")))
+                        .uri(reviewServiceUrl))
 
                 .build();
     }
