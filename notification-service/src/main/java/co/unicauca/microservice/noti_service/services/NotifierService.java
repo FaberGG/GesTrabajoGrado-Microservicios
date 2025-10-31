@@ -27,8 +27,13 @@ public class NotifierService {
         String correlationId = MDC.get("correlationId");
 
         try {
+            String recipientsStr = request.recipients().stream()
+                    .map(r -> r.email())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("No recipients");
+
             // Log inicio del procesamiento
-            notificationLogger.logNotificationProcessing(correlationId, request.channel(), request.to(), false);
+            notificationLogger.logNotificationProcessing(correlationId, request.channel(), recipientsStr, false);
 
             if (request.forceFail()) {
                 throw new RuntimeException("Forced failure in synchronous send");
@@ -40,7 +45,7 @@ public class NotifierService {
             // Log de éxito
             notificationLogger.logNotificationSent(
                 request.channel(),
-                request.to(),
+                recipientsStr,
                 request.message(),
                 correlationId,
                 false,
@@ -58,6 +63,11 @@ public class NotifierService {
 
     public void publishAsync(NotificationRequest request, String correlationId) {
         try {
+            String recipientsStr = request.recipients().stream()
+                    .map(r -> r.email())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("No recipients");
+
             MessagePostProcessor processor = msg -> {
                 msg.getMessageProperties().setHeader(RabbitConfig.HEADER_CORRELATION, correlationId);
                 return msg;
@@ -66,7 +76,7 @@ public class NotifierService {
             rabbitTemplate.convertAndSend(RabbitConfig.NOTIFICATIONS_QUEUE, request, processor);
 
             // Log de publicación en la cola
-            notificationLogger.logNotificationPublished(correlationId, request.channel(), request.to());
+            notificationLogger.logNotificationPublished(correlationId, request.channel(), recipientsStr);
 
         } catch (Exception e) {
             notificationLogger.logNotificationError(correlationId, e.getMessage(), true, request.channel());
@@ -76,8 +86,13 @@ public class NotifierService {
 
     public void send(NotificationRequest request, String correlationId) {
         try {
+            String recipientsStr = request.recipients().stream()
+                    .map(r -> r.email())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("No recipients");
+
             // Log inicio del procesamiento asíncrono
-            notificationLogger.logNotificationProcessing(correlationId, request.channel(), request.to(), true);
+            notificationLogger.logNotificationProcessing(correlationId, request.channel(), recipientsStr, true);
 
             if (request.forceFail()) {
                 throw new RuntimeException("Forced failure for async processing");
@@ -89,7 +104,7 @@ public class NotifierService {
             // Log de éxito
             notificationLogger.logNotificationSent(
                 request.channel(),
-                request.to(),
+                recipientsStr,
                 request.message(),
                 correlationId,
                 true,
@@ -107,19 +122,23 @@ public class NotifierService {
      */
     private void simulateNotificationSend(NotificationRequest request, String correlationId, boolean isAsync) {
         String prefix = isAsync ? "ASYNC" : "SYNC";
+        String recipientsStr = request.recipients().stream()
+                .map(r -> r.email())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("No recipients");
 
         if ("email".equalsIgnoreCase(request.channel())) {
-            log.info("📧 [EMAIL MOCK {}] Enviando correo a: {}", prefix, request.to());
+            log.info("📧 [EMAIL MOCK {}] Enviando correo a: {}", prefix, recipientsStr);
             log.info("   Asunto: Notificación del Sistema");
             log.info("   Mensaje: {}", request.message());
             log.info("   CorrelationId: {}", correlationId);
         } else if ("sms".equalsIgnoreCase(request.channel())) {
-            log.info("📱 [SMS MOCK {}] Enviando SMS a: {}", prefix, request.to());
+            log.info("📱 [SMS MOCK {}] Enviando SMS a: {}", prefix, recipientsStr);
             log.info("   Mensaje: {}", request.message());
             log.info("   CorrelationId: {}", correlationId);
         } else {
             log.info("🔔 [NOTIFICATION MOCK {}] Canal: {} - Destinatario: {}",
-                    prefix, request.channel(), request.to());
+                    prefix, request.channel(), recipientsStr);
             log.info("   Mensaje: {}", request.message());
             log.info("   CorrelationId: {}", correlationId);
         }

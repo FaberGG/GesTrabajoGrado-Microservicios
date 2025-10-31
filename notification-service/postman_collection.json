@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "Notification Service - Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Test 1 - Document Submitted (Sync)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificationType\": \"DOCUMENT_SUBMITTED\",\n  \"channel\": \"email\",\n  \"recipients\": [\n    {\n      \"email\": \"coordinador@unicauca.edu.co\",\n      \"role\": \"COORDINATOR\",\n      \"name\": \"Dr. Pedro Coordinador\"\n    },\n    {\n      \"email\": \"jefe.dpto@unicauca.edu.co\",\n      \"role\": \"DEPARTMENT_HEAD\",\n      \"name\": \"Dr. Luis Jefe\"\n    }\n  ],\n  \"businessContext\": {\n    \"projectTitle\": \"Implementación de Sistema de Notificaciones\",\n    \"documentType\": \"FORMATO_A\",\n    \"submittedBy\": \"Juan Pérez Estudiante\",\n    \"submissionDate\": \"2025-10-30T10:30:00\",\n    \"documentVersion\": 1\n  },\n  \"message\": null,\n  \"templateId\": null,\n  \"forceFail\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/notifications",
+          "host": ["{{base_url}}"],
+          "path": ["notifications"]
+        }
+      }
+    },
+    {
+      "name": "Test 2 - Evaluation Completed (Async)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificationType\": \"EVALUATION_COMPLETED\",\n  \"channel\": \"email\",\n  \"recipients\": [\n    {\n      \"email\": \"estudiante@unicauca.edu.co\",\n      \"role\": \"STUDENT\",\n      \"name\": null\n    }\n  ],\n  \"businessContext\": {\n    \"projectTitle\": \"Implementación de Sistema de Notificaciones\",\n    \"documentType\": \"ANTEPROYECTO\",\n    \"evaluationResult\": \"APPROVED\",\n    \"evaluatedBy\": \"Dra. María González\",\n    \"evaluationDate\": \"2025-10-30T15:00:00\"\n  },\n  \"message\": null,\n  \"templateId\": null,\n  \"forceFail\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/notifications/async",
+          "host": ["{{base_url}}"],
+          "path": ["notifications", "async"]
+        }
+      }
+    },
+    {
+      "name": "Test 3 - Evaluator Assigned (Sync)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificationType\": \"EVALUATOR_ASSIGNED\",\n  \"channel\": \"email\",\n  \"recipients\": [\n    {\n      \"email\": \"evaluador1@unicauca.edu.co\",\n      \"role\": \"EVALUATOR\",\n      \"name\": \"Dr. Carlos Ruiz\"\n    },\n    {\n      \"email\": \"evaluador2@unicauca.edu.co\",\n      \"role\": \"EVALUATOR\",\n      \"name\": \"Dra. Ana Torres\"\n    }\n  ],\n  \"businessContext\": {\n    \"projectTitle\": \"Implementación de Sistema de Notificaciones\",\n    \"documentType\": \"ANTEPROYECTO\",\n    \"directorName\": \"Dr. Carlos Ruiz\",\n    \"dueDate\": \"2025-11-15\"\n  },\n  \"message\": null,\n  \"templateId\": null,\n  \"forceFail\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/notifications",
+          "host": ["{{base_url}}"],
+          "path": ["notifications"]
+        }
+      }
+    },
+    {
+      "name": "Test 4 - Status Changed (Async)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificationType\": \"STATUS_CHANGED\",\n  \"channel\": \"email\",\n  \"recipients\": [\n    {\n      \"email\": \"estudiante@unicauca.edu.co\",\n      \"role\": \"STUDENT\",\n      \"name\": null\n    },\n    {\n      \"email\": \"director@unicauca.edu.co\",\n      \"role\": \"ADVISOR\",\n      \"name\": null\n    }\n  ],\n  \"businessContext\": {\n    \"projectTitle\": \"Implementación de Sistema de Notificaciones\",\n    \"currentStatus\": \"APROBADO\",\n    \"previousStatus\": \"EN_REVISION\",\n    \"changeDate\": \"2025-10-30T16:00:00\"\n  },\n  \"message\": null,\n  \"templateId\": null,\n  \"forceFail\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/notifications/async",
+          "host": ["{{base_url}}"],
+          "path": ["notifications", "async"]
+        }
+      }
+    },
+    {
+      "name": "Test 5 - Deadline Reminder (Sync)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"notificationType\": \"DEADLINE_REMINDER\",\n  \"channel\": \"email\",\n  \"recipients\": [\n    {\n      \"email\": \"estudiante@unicauca.edu.co\",\n      \"role\": \"STUDENT\",\n      \"name\": null\n    }\n  ],\n  \"businessContext\": {\n    \"projectTitle\": \"Implementación de Sistema de Notificaciones\",\n    \"pendingActivity\": \"Entrega de Anteproyecto\",\n    \"dueDate\": \"2025-11-15\",\n    \"daysRemaining\": 16\n  },\n  \"message\": null,\n  \"templateId\": null,\n  \"forceFail\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/notifications",
+          "host": ["{{base_url}}"],
+          "path": ["notifications"]
+        }
+      }
+    },
+    {
+      "name": "Test 6 - Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/actuator/health",
+          "host": ["{{base_url}}"],
+          "path": ["actuator", "health"]
+        }
+      }
+    }
+  ]
+}
+
