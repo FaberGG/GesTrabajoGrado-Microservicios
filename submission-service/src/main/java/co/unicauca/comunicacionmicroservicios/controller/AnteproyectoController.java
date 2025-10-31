@@ -4,7 +4,6 @@ import co.unicauca.comunicacionmicroservicios.dto.*;
 import co.unicauca.comunicacionmicroservicios.util.SecurityRules;
 import co.unicauca.comunicacionmicroservicios.service.SubmissionService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,10 +17,14 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @RestController
 @RequestMapping("/api/submissions/anteproyecto")
-@RequiredArgsConstructor
 public class AnteproyectoController {
 
     private final SubmissionService service;
+
+    // Constructor explícito en lugar de @RequiredArgsConstructor
+    public AnteproyectoController(SubmissionService service) {
+        this.service = service;
+    }
 
     /**
      * RF6 — Subir anteproyecto.

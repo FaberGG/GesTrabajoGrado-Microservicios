@@ -1,14 +1,14 @@
 server:
-  port: ${SERVER_PORT:8082}
+  port: 8082
 
 spring:
   application:
     name: submission-service
 
   datasource:
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+    url: jdbc:postgresql://${DATABASE_HOST:postgres-submission}:${DATABASE_PORT:5432}/${DATABASE_NAME:submission_db}
+    username: ${SUBMISSION_DB_USER:submission_user}
+    password: ${SUBMISSION_DB_PASS:submission_password}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -19,24 +19,35 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: update  # Cambiado temporalmente para crear las tablas
     show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-        jdbc.lob.non_contextual_creation: true
+        format_sql: false
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
 
   rabbitmq:
     host: ${RABBITMQ_HOST:rabbitmq}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    username: ${RABBITMQ_USER:admin}
+    password: ${RABBITMQ_PASS:admin_password}
+    connection-timeout: 30000
 
-jwt:
-  secret: ${JWT_SECRET}
-  expiration: 86400000
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
 
+# Almacenamiento de archivos
+file:
+  storage:
+    path: ${FILE_STORAGE_PATH:/app/uploads}
+
+# Configuración de RabbitMQ - Exchanges y Routing Keys
 submission:
   exchanges:
     formato-a: formato-a-exchange
@@ -48,31 +59,38 @@ submission:
     anteproyecto-enviado: anteproyecto.enviado
     proyecto-rechazo-def: proyecto.rechazado-definitivamente
 
+# Cliente HTTP para Notification Service
 notification:
-  base-url: http://notification:8083/api/notifications
-  timeout-ms: 3000
+  base-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8083/api/notifications}
+  timeout-ms: 5000
 
-file:
-  storage:
-    path: ${FILE_STORAGE_PATH:/app/uploads}
-
+# Logging para producción
 logging:
   level:
-    root: WARN
-    co.unicauca: INFO
-    org.hibernate.SQL: DEBUG
-  file.name: logs/submission-service.log
+    root: INFO
+    co.unicauca.comunicacionmicroservicios: INFO
+    org.springframework.amqp: WARN
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
+# Actuator endpoints
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
       base-path: /actuator
   endpoint:
     health:
-      show-details: always
-      probes.enabled: true
+      show-details: when-authorized
   health:
-    livenessState.enabled: true
-    readinessState.enabled: true
+    rabbit:
+      enabled: true
+    db:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true

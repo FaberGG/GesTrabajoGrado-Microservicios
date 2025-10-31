@@ -51,8 +51,22 @@ public class ProyectoGrado {
     public boolean puedeSubirNuevaVersion() {
         return estado == enumEstadoProyecto.RECHAZADO && numeroIntentos < 3;
     }
-    public void marcarComoRechazadoDefinitivo() { this.estado = enumEstadoProyecto.RECHAZADO_DEFINITIVO; }
-    public void incrementarIntentos() { this.numeroIntentos = this.numeroIntentos + 1; }
+
+    public void marcarComoRechazadoDefinitivo() {
+        this.estado = enumEstadoProyecto.RECHAZADO_DEFINITIVO;
+    }
+
+    public void incrementarIntentos() {
+        this.numeroIntentos = this.numeroIntentos + 1;
+    }
+
+    public void marcarAprobado() {
+        this.estado = enumEstadoProyecto.APROBADO;
+    }
+
+    public void marcarRechazado() {
+        this.estado = enumEstadoProyecto.RECHAZADO;
+    }
 
     public Integer getId() {
         return id;

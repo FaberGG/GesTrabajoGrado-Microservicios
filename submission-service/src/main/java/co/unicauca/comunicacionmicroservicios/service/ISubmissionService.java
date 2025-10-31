@@ -5,7 +5,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Optional;
 
-public interface SubmissionService {
+public interface ISubmissionService {
 
     // FORMATO A
     IdResponse crearFormatoA(String userId, FormatoAData data, MultipartFile pdf, MultipartFile carta);
