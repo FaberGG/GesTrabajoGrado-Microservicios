@@ -14,16 +14,10 @@ import java.util.Map;
 /**
  * Controlador para endpoints de salud y diagnóstico del gateway.
  *
- * Endpoints disponibles:
- * - GET /api/gateway/health - health check básico
- * - GET /api/gateway/info - información de la aplicación
- *
- * Estos endpoints son públicos (no requieren autenticación) y se usan para:
- * - Verificar que el gateway está activo
- * - Monitoreo de servicios (Kubernetes liveness/readiness probes)
- * - Obtener información de versión y configuración
+ * Incluye fallbacks para todos los 5 microservicios del sistema.
  *
  * @author Gateway Team
+ * @version 2.0.0
  */
 @RestController
 @RequestMapping("/api/gateway")
@@ -38,44 +32,16 @@ public class HealthController {
     @Value("${info.app.description:API Gateway}")
     private String description;
 
-    /**
-     * Health check endpoint.
-     *
-     * Retorna 200 OK si el gateway está funcionando correctamente.
-     * Usado por orquestadores (Docker, Kubernetes) para verificar el estado del servicio.
-     *
-     * Respuesta:
-     * {
-     *   "status": "UP",
-     *   "timestamp": "2025-10-15T10:30:00Z"
-     * }
-     */
     @GetMapping("/health")
     public Mono<ResponseEntity<Map<String, Object>>> health() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "UP");
         response.put("timestamp", Instant.now().toString());
+        response.put("service", applicationName);
 
         return Mono.just(ResponseEntity.ok(response));
     }
 
-    /**
-     * Info endpoint.
-     *
-     * Retorna información sobre la aplicación:
-     * - Nombre del servicio
-     * - Versión
-     * - Descripción
-     * - Timestamp actual
-     *
-     * Respuesta:
-     * {
-     *   "application": "gateway-service",
-     *   "version": "1.0.0",
-     *   "description": "API Gateway para Sistema de Gestión de Trabajo de Grado",
-     *   "timestamp": "2025-10-15T10:30:00Z"
-     * }
-     */
     @GetMapping("/info")
     public Mono<ResponseEntity<Map<String, Object>>> info() {
         Map<String, Object> response = new HashMap<>();
@@ -84,47 +50,61 @@ public class HealthController {
         response.put("description", description);
         response.put("timestamp", Instant.now().toString());
 
+        Map<String, String> services = new HashMap<>();
+        services.put("identity", "Authentication and User Management");
+        services.put("submission", "Document Submission Management");
+        services.put("notification", "Asynchronous Notifications");
+        services.put("review", "Document Review and Evaluation");
+        services.put("tracking", "Progress Tracking and Event History");
+
+        response.put("connectedServices", services);
+
         return Mono.just(ResponseEntity.ok(response));
     }
 
-    /**
-     * Fallback endpoint para Identity Service.
-     *
-     * Se activa cuando el circuit breaker del identity service está abierto
-     * o cuando el servicio no responde.
-     */
+    // ============================================================
+    // FALLBACK ENDPOINTS - Circuit Breaker
+    // ============================================================
+
     @GetMapping("/fallback/identity")
     public Mono<ResponseEntity<Map<String, Object>>> identityFallback() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "Service Unavailable");
-        response.put("message", "Identity service is temporarily unavailable");
-        response.put("timestamp", Instant.now().toString());
-
-        return Mono.just(ResponseEntity.status(503).body(response));
+        return createFallbackResponse("Identity Service");
     }
 
-    /**
-     * Fallback endpoint para Submission Service.
-     */
     @GetMapping("/fallback/submission")
     public Mono<ResponseEntity<Map<String, Object>>> submissionFallback() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("error", "Service Unavailable");
-        response.put("message", "Submission service is temporarily unavailable");
-        response.put("timestamp", Instant.now().toString());
+        return createFallbackResponse("Submission Service");
+    }
 
-        return Mono.just(ResponseEntity.status(503).body(response));
+    @GetMapping("/fallback/notification")
+    public Mono<ResponseEntity<Map<String, Object>>> notificationFallback() {
+        return createFallbackResponse("Notification Service");
+    }
+
+    @GetMapping("/fallback/review")
+    public Mono<ResponseEntity<Map<String, Object>>> reviewFallback() {
+        return createFallbackResponse("Review Service");
+    }
+
+    @GetMapping("/fallback/tracking")
+    public Mono<ResponseEntity<Map<String, Object>>> trackingFallback() {
+        return createFallbackResponse("Progress Tracking Service");
+    }
+
+    @GetMapping("/fallback/generic")
+    public Mono<ResponseEntity<Map<String, Object>>> genericFallback() {
+        return createFallbackResponse("Backend Service");
     }
 
     /**
-     * Fallback endpoint para Notification Service.
+     * Helper para crear respuestas de fallback consistentes
      */
-    @GetMapping("/fallback/notification")
-    public Mono<ResponseEntity<Map<String, Object>>> notificationFallback() {
+    private Mono<ResponseEntity<Map<String, Object>>> createFallbackResponse(String serviceName) {
         Map<String, Object> response = new HashMap<>();
         response.put("error", "Service Unavailable");
-        response.put("message", "Notification service is temporarily unavailable");
+        response.put("message", serviceName + " is temporarily unavailable. Please try again later.");
         response.put("timestamp", Instant.now().toString());
+        response.put("suggestion", "Check service health or contact system administrator");
 
         return Mono.just(ResponseEntity.status(503).body(response));
     }
