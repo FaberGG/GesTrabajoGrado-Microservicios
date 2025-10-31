@@ -5,31 +5,18 @@
 package co.unicauca.comunicacionmicroservicios.controller;
 
 /**
- *
- * @author USUARIO
+ * Controlador básico de salud (health check).
+ * Los endpoints principales están en FormatoAController y AnteproyectoController.
  */
 
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import co.unicauca.comunicacionmicroservicios.dto.*;
-import co.unicauca.comunicacionmicroservicios.service.*;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/submissions")
-@RequiredArgsConstructor
-
 public class SubmissionController {
-  private final SubmissionService service;
 
-  @PostMapping
-  public ResponseEntity<SubmissionResponse> create(@Valid @RequestBody SubmissionRequest req) {
-    SubmissionResponse resp = service.createSubmission(req);
-    return ResponseEntity.status(201).body(resp);
-  }
     @GetMapping("/health")
-    public String health() { return "ok"; }
+    public String health() {
+        return "Submission Service OK";
+    }
 }
-
-

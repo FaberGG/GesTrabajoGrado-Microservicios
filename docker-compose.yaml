@@ -105,13 +105,15 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8082
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=jdbc:postgresql://postgres-submission:5432/submission_db
-      - DATABASE_USERNAME=${SUBMISSION_DB_USER}
-      - DATABASE_PASSWORD=${SUBMISSION_DB_PASS}
+      - DATABASE_HOST=postgres-submission
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=submission_db
+      - SUBMISSION_DB_USER=${SUBMISSION_DB_USER}
+      - SUBMISSION_DB_PASS=${SUBMISSION_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USERNAME=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
       - FILE_STORAGE_PATH=/app/uploads
     volumes:
       - submission-uploads:/app/uploads

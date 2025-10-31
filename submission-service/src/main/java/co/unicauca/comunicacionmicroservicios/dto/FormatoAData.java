@@ -1,6 +1,6 @@
 package co.unicauca.comunicacionmicroservicios.dto;
 
-import co.unicauca.gestiontrabajogrado.domain.model.enumModalidad;
+import co.unicauca.comunicacionmicroservicios.domain.model.enumModalidad;
 import jakarta.validation.constraints.*;
 import java.util.List;
 

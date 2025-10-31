@@ -1,6 +1,5 @@
 package co.unicauca.comunicacionmicroservicios.service;
 
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -9,11 +8,15 @@ import org.springframework.stereotype.Service;
 
 /** Publicador de eventos de dominio desde Submission. */
 @Service
-@RequiredArgsConstructor
 public class SubmissionPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(SubmissionPublisher.class);
     private final RabbitTemplate rabbitTemplate;
+
+    // Constructor explícito en lugar de @RequiredArgsConstructor
+    public SubmissionPublisher(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+    }
 
     // Exchanges
     @Value("${submission.exchanges.formato-a:formato-a-exchange}")

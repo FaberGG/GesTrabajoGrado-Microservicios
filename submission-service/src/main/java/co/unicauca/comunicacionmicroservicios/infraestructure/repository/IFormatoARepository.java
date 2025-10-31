@@ -12,6 +12,8 @@ package co.unicauca.comunicacionmicroservicios.infraestructure.repository;
 import co.unicauca.comunicacionmicroservicios.domain.model.*;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface IFormatoARepository extends JpaRepository<FormatoA, Integer> {
     // Última versión subida para un proyecto (por número de intento)
     Optional<FormatoA> findTopByProyectoOrderByNumeroIntentoDesc(ProyectoGrado proyecto);

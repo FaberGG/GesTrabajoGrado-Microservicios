@@ -1,6 +1,6 @@
 package co.unicauca.comunicacionmicroservicios.dto;
 
-import co.unicauca.gestiontrabajogrado.domain.model.enumEstadoFormato;
+import co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato;
 import jakarta.validation.constraints.*;
 
 /** Cambiar estado de una versión de Formato A: APROBADO o RECHAZADO. */

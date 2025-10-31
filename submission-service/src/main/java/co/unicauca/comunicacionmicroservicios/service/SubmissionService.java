@@ -3,7 +3,6 @@ package co.unicauca.comunicacionmicroservicios.service;
 import co.unicauca.comunicacionmicroservicios.domain.model.*;
 import co.unicauca.comunicacionmicroservicios.dto.*;
 import co.unicauca.comunicacionmicroservicios.infraestructure.repository.*;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,8 +19,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
-public class SubmissionService implements SubmissionService {
+public class SubmissionService implements ISubmissionService {
 
     private static final Logger log = LoggerFactory.getLogger(SubmissionService.class);
 
@@ -30,10 +28,23 @@ public class SubmissionService implements SubmissionService {
     private final IAnteproyectoRepository anteproyectoRepo;
 
     private final SubmissionPublisher publisher;
-    private final NotificationClient notificationClient; // lo mantenemos por si quieres notificación HTTP
+    private final NotificationClient notificationClient;
 
     @Value("${file.storage.path:/app/uploads}")
     private String storageBasePath;
+
+    // Constructor explícito en lugar de @RequiredArgsConstructor
+    public SubmissionService(IProyectoGradoRepository proyectoRepo,
+                            IFormatoARepository formatoRepo,
+                            IAnteproyectoRepository anteproyectoRepo,
+                            SubmissionPublisher publisher,
+                            NotificationClient notificationClient) {
+        this.proyectoRepo = proyectoRepo;
+        this.formatoRepo = formatoRepo;
+        this.anteproyectoRepo = anteproyectoRepo;
+        this.publisher = publisher;
+        this.notificationClient = notificationClient;
+    }
 
     // ---------------------------
     // RF2: Crear Formato A v1
