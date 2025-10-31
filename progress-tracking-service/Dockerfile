@@ -1,14 +1,35 @@
-# Imagen base: Java 21 (puede ser 17 si tu proyecto usa esa versión)
-FROM openjdk:21-jdk-slim
+# Multi-stage build: Build with Maven then run on JRE
 
-# Directorio de trabajo dentro del contenedor
+# Stage 1: Build
+FROM maven:3.9.5-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copia el archivo JAR generado por Maven al contenedor
-COPY target/progress-tracking-service-0.0.1-SNAPSHOT.jar app.jar
+# Copy Maven descriptor first to leverage cache
+COPY pom.xml .
+RUN mvn -B dependency:go-offline
 
-# Expone el puerto 8080 (el mismo que usa tu aplicación)
-EXPOSE 8080
+# Copy sources and build
+COPY src ./src
+RUN mvn clean package -DskipTests
 
-# Comando para ejecutar el microservicio
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Install wget for container healthchecks (used in docker-compose)
+RUN apk add --no-cache wget
+
+# Create non-root user for security
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+# Copy built JAR from builder stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Expose application port (overridable via SERVER_PORT)
+EXPOSE 8085
+
+# Optional JVM opts
+ENV JAVA_OPTS="-Xms256m -Xmx512m"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
