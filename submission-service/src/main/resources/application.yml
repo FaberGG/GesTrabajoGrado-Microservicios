@@ -36,22 +36,17 @@ file:
   storage:
     path: ${FILE_STORAGE_PATH:/app/uploads}
 
-# Configuración de RabbitMQ - Exchanges y Routing Keys
-submission:
-  exchanges:
-    formato-a: formato-a-exchange
-    anteproyecto: anteproyecto-exchange
-    proyecto: proyecto-exchange
-  routing:
-    formato-a-enviado: formato-a.enviado
-    formato-a-reenviado: formato-a.reenviado
-    anteproyecto-enviado: anteproyecto.enviado
-    proyecto-rechazo-def: proyecto.rechazado-definitivamente
-
-# Cliente HTTP para Notification Service (opcional)
-notification:
-  base-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8083/api/notifications}
+# Cliente HTTP para Identity Service
+identity:
+  base-url: ${IDENTITY_SERVICE_URL:http://identity:8081/api}
   timeout-ms: 3000
+
+# Configuración de notificaciones
+notification:
+  # Emails por defecto (TEMPORAL - deberían obtenerse del identity-service)
+  default:
+    coordinador-email: ${COORDINADOR_EMAIL:coordinador@unicauca.edu.co}
+    jefe-departamento-email: ${JEFE_DEPARTAMENTO_EMAIL:jefe.departamento@unicauca.edu.co}
 
 # Logging
 logging:

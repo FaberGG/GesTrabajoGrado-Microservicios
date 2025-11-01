@@ -27,8 +27,8 @@ public class SubmissionService implements ISubmissionService {
     private final IFormatoARepository formatoRepo;
     private final IAnteproyectoRepository anteproyectoRepo;
 
-    private final SubmissionPublisher publisher;
-    private final NotificationClient notificationClient;
+    private final NotificationPublisher notificationPublisher;
+    private final IdentityClient identityClient;
 
     @Value("${file.storage.path:/app/uploads}")
     private String storageBasePath;
@@ -37,13 +37,13 @@ public class SubmissionService implements ISubmissionService {
     public SubmissionService(IProyectoGradoRepository proyectoRepo,
                             IFormatoARepository formatoRepo,
                             IAnteproyectoRepository anteproyectoRepo,
-                            SubmissionPublisher publisher,
-                            NotificationClient notificationClient) {
+                            NotificationPublisher notificationPublisher,
+                            IdentityClient identityClient) {
         this.proyectoRepo = proyectoRepo;
         this.formatoRepo = formatoRepo;
         this.anteproyectoRepo = anteproyectoRepo;
-        this.publisher = publisher;
-        this.notificationClient = notificationClient;
+        this.notificationPublisher = notificationPublisher;
+        this.identityClient = identityClient;
     }
 
     // ---------------------------
@@ -93,15 +93,20 @@ public class SubmissionService implements ISubmissionService {
         v1.setEstado(enumEstadoFormato.PENDIENTE);
         formatoRepo.save(v1);
 
-        // Evento
-        Map<String, Object> evento = Map.of(
-                "proyectoId", proyecto.getId(),
-                "version", 1,
-                "titulo", proyecto.getTitulo()
-        );
-        publisher.publicarFormatoAEnviado(evento);
+        // RF2: Enviar notificación asíncrona al coordinador
+        String coordinadorEmail = identityClient.getCoordinadorEmail();
+        String submittedByName = identityClient.getUserName(userId);
 
-        log.info("Formato A v1 creado para proyecto {}", proyecto.getId());
+        notificationPublisher.notificarFormatoAEnviado(
+                proyecto.getId(),
+                proyecto.getTitulo(),
+                1, // versión 1
+                submittedByName,
+                coordinadorEmail
+        );
+
+        log.info("Formato A v1 creado para proyecto {} - Notificación enviada al coordinador: {}",
+                proyecto.getId(), coordinadorEmail);
         return new IdResponse(proyecto.getId().longValue());
     }
 
@@ -207,17 +212,26 @@ public class SubmissionService implements ISubmissionService {
         nueva.setEstado(enumEstadoFormato.PENDIENTE);
         formatoRepo.save(nueva);
 
-        publisher.publicarFormatoAReenviado(Map.of(
-                "proyectoId", proyecto.getId(),
-                "version", next,
-                "titulo", proyecto.getTitulo()
-        ));
+        // RF4: Enviar notificación asíncrona al coordinador (reenvío)
+        String coordinadorEmail = identityClient.getCoordinadorEmail();
+        String submittedByName = identityClient.getUserName(userId);
+
+        notificationPublisher.notificarFormatoAEnviado(
+                proyecto.getId(),
+                proyecto.getTitulo(),
+                next, // versión 2 o 3
+                submittedByName,
+                coordinadorEmail
+        );
+
+        log.info("Formato A v{} reenviado para proyecto {} - Notificación enviada al coordinador: {}",
+                next, proyecto.getId(), coordinadorEmail);
 
         return new IdResponse(proyecto.getId().longValue());
         }
 
     // ------------------------------------------
-    // Cambiar estado de una versión (por Review)
+    // RF3: Cambiar estado de una versión (por Review/Coordinador)
     // ------------------------------------------
     @Override
     @Transactional
@@ -231,6 +245,10 @@ public class SubmissionService implements ISubmissionService {
             proyecto.marcarAprobado();
             proyectoRepo.save(proyecto);
             formatoRepo.save(formato);
+
+            // RF3: Notificar a docentes y estudiantes sobre la evaluación (APROBADO)
+            notificarEvaluacionCompletada(proyecto, "APROBADO", req.getEvaluadoPor(), req.getObservaciones());
+
             return;
         }
 
@@ -240,19 +258,91 @@ public class SubmissionService implements ISubmissionService {
             proyectoRepo.save(proyecto);
             formatoRepo.save(formato);
 
+            // RF3: Notificar a docentes y estudiantes sobre la evaluación (RECHAZADO)
+            notificarEvaluacionCompletada(proyecto, "RECHAZADO", req.getEvaluadoPor(), req.getObservaciones());
+
             // Si este rechazo ocurre en el 3er intento => Rechazo definitivo
             if (Objects.equals(proyecto.getNumeroIntentos(), 3)) {
                 proyecto.marcarComoRechazadoDefinitivo();
                 proyectoRepo.save(proyecto);
-                publisher.publicarProyectoRechazoDefinitivo(Map.of(
-                        "proyectoId", proyecto.getId(),
-                        "titulo", proyecto.getTitulo()
-                ));
+
+                // Notificar a estudiantes y director sobre rechazo definitivo
+                java.util.List<String> recipientEmails = new java.util.ArrayList<>();
+
+                // Agregar emails de estudiantes
+                if (proyecto.getEstudiante1Id() != null) {
+                    recipientEmails.add(identityClient.getUserEmail(proyecto.getEstudiante1Id().toString()));
+                }
+                if (proyecto.getEstudiante2Id() != null) {
+                    recipientEmails.add(identityClient.getUserEmail(proyecto.getEstudiante2Id().toString()));
+                }
+                // Agregar email del director
+                if (proyecto.getDirectorId() != null) {
+                    recipientEmails.add(identityClient.getUserEmail(proyecto.getDirectorId().toString()));
+                }
+
+                if (!recipientEmails.isEmpty()) {
+                    notificationPublisher.notificarRechazoDefinitivo(
+                            proyecto.getId(),
+                            proyecto.getTitulo(),
+                            recipientEmails
+                    );
+                    log.info("Notificaciones de rechazo definitivo enviadas para proyecto {}", proyecto.getId());
+                }
             }
             return;
         }
 
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado inválido para evaluación");
+    }
+
+    /**
+     * RF3: Notifica a docentes y estudiantes cuando se completa una evaluación.
+     * Esta notificación se envía tanto cuando se aprueba como cuando se rechaza el Formato A.
+     */
+    private void notificarEvaluacionCompletada(
+            ProyectoGrado proyecto,
+            String resultado,
+            String evaluadoPor,
+            String observaciones
+    ) {
+        try {
+            // Recopilar emails de docentes (director y codirector)
+            List<String> docenteEmails = new ArrayList<>();
+            if (proyecto.getDirectorId() != null) {
+                docenteEmails.add(identityClient.getUserEmail(proyecto.getDirectorId().toString()));
+            }
+            if (proyecto.getCodirectorId() != null) {
+                docenteEmails.add(identityClient.getUserEmail(proyecto.getCodirectorId().toString()));
+            }
+
+            // Recopilar emails de estudiantes
+            List<String> estudianteEmails = new ArrayList<>();
+            if (proyecto.getEstudiante1Id() != null) {
+                estudianteEmails.add(identityClient.getUserEmail(proyecto.getEstudiante1Id().toString()));
+            }
+            if (proyecto.getEstudiante2Id() != null) {
+                estudianteEmails.add(identityClient.getUserEmail(proyecto.getEstudiante2Id().toString()));
+            }
+
+            // Enviar notificación usando NotificationPublisher
+            notificationPublisher.notificarEvaluacionCompletada(
+                    proyecto.getId(),
+                    proyecto.getTitulo(),
+                    resultado,
+                    evaluadoPor,
+                    observaciones != null ? observaciones : "",
+                    docenteEmails,
+                    estudianteEmails
+            );
+
+            log.info("RF3: Notificación de evaluación enviada a {} docentes y {} estudiantes para proyecto {}",
+                    docenteEmails.size(), estudianteEmails.size(), proyecto.getId());
+
+        } catch (Exception e) {
+            log.error("Error al enviar notificación de evaluación para proyecto {}", proyecto.getId(), e);
+            // No lanzamos excepción para no afectar la operación principal
+        }
     }
 
     // ---------------------------
@@ -295,10 +385,20 @@ public class SubmissionService implements ISubmissionService {
         // proyecto.setEstado(enumEstadoProyecto.ANTEPROYECTO_ENVIADO); // si existe en tu enum
         // proyectoRepo.save(proyecto);
 
-        publisher.publicarAnteproyectoEnviado(Map.of(
-                "proyectoId", proyecto.getId(),
-                "titulo", proyecto.getTitulo()
-        ));
+        // RF6: Enviar notificación asíncrona al jefe de departamento
+        String jefeDepartamentoEmail = identityClient.getJefeDepartamentoEmail();
+        String submittedByName = identityClient.getUserName(userId);
+
+        notificationPublisher.notificarAnteproyectoEnviado(
+                proyecto.getId(),
+                proyecto.getTitulo(),
+                submittedByName,
+                jefeDepartamentoEmail
+        );
+
+        log.info("Anteproyecto enviado para proyecto {} - Notificación enviada al jefe de departamento: {}",
+                proyecto.getId(), jefeDepartamentoEmail);
+
 
         return new IdResponse(ant.getId().longValue());
     }
