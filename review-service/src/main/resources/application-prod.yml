@@ -1,38 +1,5 @@
 server:
   port: ${SERVER_PORT:8084}
-
-spring:
-  application:
-    name: review-service
-
-  datasource:
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-
-  rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
-
-services:
-  submission:
-    base-url: ${SUBMISSION_URL:http://submission:8082}
-  identity:
-    base-url: ${IDENTITY_URL:http://identity:8081}
-
-logging:
-  level:
-    root: INFO
-    co.unicauca.review: INFO
-server:
-  port: ${SERVER_PORT:8084}
   compression:
     enabled: true
 
