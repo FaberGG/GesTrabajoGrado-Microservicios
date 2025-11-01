@@ -11,265 +11,552 @@ Microservicio de notificaciones para el Sistema de Gestión de Trabajos de Grado
 - ✅ **Múltiples Destinatarios** - Soporte para notificar a varios usuarios simultáneamente
 - ✅ **Integración con RabbitMQ** - Para procesamiento asíncrono resiliente
 - ✅ **Sin Persistencia** - Microservicio ligero enfocado en envío de notificaciones
+- ✅ **Trazabilidad con Correlation ID** - Logging estructurado para seguimiento de notificaciones
 
-## 🏗️ Arquitectura
+---
 
-### Patrón Decorator
+## 🗂️ Tipos de Notificaciones Soportadas
+
+| Tipo | Descripción | Casos de Uso en el PMV | Contexto Requerido |
+|------|-------------|------------------------|-------------------|
+| `DOCUMENT_SUBMITTED` | Nuevo documento enviado | RF2, RF4, RF6: Notificar al coordinador/jefe cuando se sube Formato A o Anteproyecto | `projectTitle`, `documentType`, `submittedBy`, `submissionDate`, `documentVersion` |
+| `EVALUATION_COMPLETED` | Evaluación completada | RF3: Notificar a docentes/estudiantes sobre evaluación de Formato A | `projectTitle`, `documentType`, `evaluationResult`, `evaluatedBy`, `evaluationDate` |
+| `EVALUATOR_ASSIGNED` | Evaluador asignado | RF7: Notificar a evaluadores asignados para anteproyecto | `projectTitle`, `documentType`, `directorName`, `dueDate` |
+| `STATUS_CHANGED` | Cambio de estado del proyecto | RF5: Cuando cambia el estado visible para el estudiante | `projectTitle`, `currentStatus`, `previousStatus`, `changeDate` |
+| `DEADLINE_REMINDER` | Recordatorio de fecha límite | Futuro: Recordatorios automáticos | `projectTitle`, `pendingActivity`, `dueDate`, `daysRemaining` |
+
+---
+
+## 🏗️ Arquitectura de Integración
+
+### Topología de Red Docker
+
 ```
-┌─────────────────────────────────────┐
-│   LoggingNotifierDecorator          │  ← Logging estructurado
-│  ┌──────────────────────────────┐   │
-│  │ ValidationNotifierDecorator  │   │  ← Validación de negocio
-│  │  ┌───────────────────────┐   │   │
-│  │  │ BaseNotifierService   │   │   │  ← Servicio base
-│  │  └───────────────────────┘   │   │
-│  └──────────────────────────────┘   │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Docker Network (Bridge)                   │
+│                                                              │
+│  ┌────────────────┐      ┌──────────────────────┐          │
+│  │ Submission     │──┐   │   RabbitMQ           │          │
+│  │ Service        │  │   │   (Compartido)       │          │
+│  └────────────────┘  │   │                      │          │
+│                      ├──▶│  Queue:              │          │
+│  ┌────────────────┐  │   │  notifications.q     │          │
+│  │ Review         │──┤   └──────────────────────┘          │
+│  │ Service        │  │            │                         │
+│  └────────────────┘  │            │                         │
+│                      │            ▼                         │
+│  ┌────────────────┐  │   ┌──────────────────────┐          │
+│  │ Progress       │──┘   │  Notification        │          │
+│  │ Tracking       │      │  Service             │          │
+│  └────────────────┘      │  (Consumer)          │          │
+│                          └──────────────────────┘          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Flujo de Procesamiento
+**🔑 Decisión Arquitectónica:**
+- ✅ **Una sola instancia de RabbitMQ** para todos los microservicios
+- ✅ Cada microservicio publica mensajes a `notifications.q`
+- ✅ Solo Notification Service consume de esta cola
+- ✅ Ventajas:
+    - Menor overhead de infraestructura
+    - Configuración centralizada
+    - Más fácil de monitorear y escalar
+    - Consistencia en el manejo de mensajes
 
-**Síncrono (HTTP)**
+---
+
+## 📌 Integración desde Otros Microservicios
+
+### Configuración Requerida en `docker-compose.yml`
+
+```yaml
+version: '3.8'
+
+networks:
+  microservices-network:
+    driver: bridge
+
+services:
+  # ═══════════════════════════════════════════════════════════
+  # RabbitMQ - COMPARTIDO POR TODOS LOS MICROSERVICIOS
+  # ═══════════════════════════════════════════════════════════
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-shared
+    restart: unless-stopped
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ═══════════════════════════════════════════════════════════
+  # NOTIFICATION SERVICE (Consumer)
+  # ═══════════════════════════════════════════════════════════
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - NOTIFICATION_MAIL_MOCK=true
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservices-network
+
+  # ═══════════════════════════════════════════════════════════
+  # SUBMISSION SERVICE (Producer)
+  # ═══════════════════════════════════════════════════════════
+  submission-service:
+    build:
+      context: ./submission-service
+      dockerfile: Dockerfile
+    container_name: submission-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservices-network
+
+  # ═══════════════════════════════════════════════════════════
+  # REVIEW SERVICE (Producer)
+  # ═══════════════════════════════════════════════════════════
+  review-service:
+    build:
+      context: ./review-service
+      dockerfile: Dockerfile
+    container_name: review-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservices-network
+
+volumes:
+  rabbitmq-data:
+    driver: local
+
+networks:
+  microservices-network:
+    driver: bridge
 ```
-Cliente → NotificationController → Notifier → Envío Directo → Respuesta
+
+---
+
+## 🔌 Configuración en Microservicios Productores
+
+### 1️⃣ Dependencias de Maven (`pom.xml`)
+
+```xml
+<dependencies>
+    <!-- Spring AMQP para RabbitMQ -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-amqp</artifactId>
+    </dependency>
+    
+    <!-- Jackson para serialización JSON -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+</dependencies>
 ```
 
-**Asíncrono (RabbitMQ)**
+### 2️⃣ Configuración de RabbitMQ (`application.yml`)
+
+```yaml
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
 ```
-Cliente → NotificationController → RabbitMQ → NotificationConsumer → Notifier → Envío
-```
 
-## 📋 Tipos de Notificaciones Soportadas
-
-| Tipo | Descripción | Contexto Requerido |
-|------|-------------|-------------------|
-| `DOCUMENT_SUBMITTED` | Nuevo documento enviado | `projectTitle`, `documentType`, `submittedBy`, `submissionDate`, `documentVersion` |
-| `EVALUATION_COMPLETED` | Evaluación completada | `projectTitle`, `documentType`, `evaluationResult`, `evaluatedBy`, `evaluationDate` |
-| `EVALUATOR_ASSIGNED` | Evaluador asignado | `projectTitle`, `documentType`, `directorName`, `dueDate` |
-| `STATUS_CHANGED` | Cambio de estado del proyecto | `projectTitle`, `currentStatus`, `previousStatus`, `changeDate` |
-| `DEADLINE_REMINDER` | Recordatorio de fecha límite | `projectTitle`, `pendingActivity`, `dueDate`, `daysRemaining` |
-
-## 🔌 Integración para Otros Microservicios
-
-### Submission Service
-
-**Escenario**: Notificar cuando un estudiante envía un documento (Formato A o Anteproyecto)
+### 3️⃣ Clase de Configuración de RabbitMQ
 
 ```java
-// Ejemplo: Envío Asíncrono vía RabbitMQ (Recomendado)
-NotificationRequest request = new NotificationRequest(
-    NotificationType.DOCUMENT_SUBMITTED,
-    "email",
-    List.of(
-        new Recipient("coordinador@unicauca.edu.co", "COORDINATOR"),
-        new Recipient("jefe.programa@unicauca.edu.co", "PROGRAM_HEAD")
-    ),
-    Map.of(
-        "projectTitle", "Sistema de Gestión Académica",
-        "documentType", "FORMATO_A", // o "ANTEPROYECTO"
-        "submittedBy", "Juan Pérez",
-        "submissionDate", LocalDateTime.now().toString(),
-        "documentVersion", 1
-    ),
-    null,  // mensaje (usa plantilla por defecto)
-    null,  // templateId (usa plantilla por defecto)
-    false  // forceFail
-);
+package com.yourproject.config;
 
-rabbitTemplate.convertAndSend("notification.queue", request);
-```
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-**Endpoint HTTP** (si necesitas respuesta inmediata):
-```http
-POST http://localhost:8083/notifications/async
-Content-Type: application/json
-
-{
-  "notificationType": "DOCUMENT_SUBMITTED",
-  "channel": "email",
-  "recipients": [
-    { "email": "coordinador@unicauca.edu.co", "role": "COORDINATOR" },
-    { "email": "jefe.programa@unicauca.edu.co", "role": "PROGRAM_HEAD" }
-  ],
-  "businessContext": {
-    "projectTitle": "Sistema de Gestión Académica",
-    "documentType": "FORMATO_A",
-    "submittedBy": "Juan Pérez",
-    "submissionDate": "2025-10-30T10:30:00",
-    "documentVersion": 1
-  }
+@Configuration
+public class RabbitMQConfig {
+    
+    public static final String NOTIFICATIONS_QUEUE = "notifications.q";
+    
+    @Bean
+    public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
+        return new Jackson2JsonMessageConverter();
+    }
+    
+    @Bean
+    public RabbitTemplate rabbitTemplate(
+            ConnectionFactory connectionFactory,
+            Jackson2JsonMessageConverter converter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(converter);
+        return template;
+    }
+    
+    @Bean
+    public Queue notificationsQueue() {
+        return new Queue(NOTIFICATIONS_QUEUE, true); // durable
+    }
 }
 ```
 
-### Review Service
+### 4️⃣ DTOs para Notificaciones
 
-**Escenario 1**: Notificar evaluación completada
-
-```java
-NotificationRequest request = new NotificationRequest(
-    NotificationType.EVALUATION_COMPLETED,
-    "email",
-    List.of(
-        new Recipient("estudiante@unicauca.edu.co", "STUDENT"),
-        new Recipient("docente.director@unicauca.edu.co", "ADVISOR")
-    ),
-    Map.of(
-        "projectTitle", "Sistema de Gestión Académica",
-        "documentType", "ANTEPROYECTO",
-        "evaluationResult", "APPROVED", // "APPROVED" | "REJECTED" | "OBSERVATIONS"
-        "evaluatedBy", "Dr. María González",
-        "evaluationDate", LocalDateTime.now().toString()
-    ),
-    null,
-    null,
-    false
-);
-
-rabbitTemplate.convertAndSend("notification.queue", request);
-```
-
-**Escenario 2**: Notificar asignación de evaluadores
+**IMPORTANTE:** Estos DTOs deben ser **idénticos** a los del Notification Service:
 
 ```java
-NotificationRequest request = new NotificationRequest(
-    NotificationType.EVALUATOR_ASSIGNED,
-    "email",
-    List.of(
-        new Recipient("evaluador1@unicauca.edu.co", "EVALUATOR"),
-        new Recipient("evaluador2@unicauca.edu.co", "EVALUATOR")
-    ),
-    Map.of(
-        "projectTitle", "Sistema de Gestión Académica",
-        "documentType", "ANTEPROYECTO",
-        "directorName", "Dr. Carlos Ruiz",
-        "dueDate", "2025-11-15"
-    ),
-    null,
-    null,
-    false
-);
+// NotificationRequest.java
+package com.yourproject.dto;
 
-rabbitTemplate.convertAndSend("notification.queue", request);
-```
+import java.util.List;
+import java.util.Map;
 
-**HTTP Endpoint**:
-```http
-POST http://localhost:8083/notifications/async
-Content-Type: application/json
+public record NotificationRequest(
+    NotificationType notificationType,
+    String channel,
+    List<Recipient> recipients,
+    Map<String, Object> businessContext,
+    String message,
+    String templateId,
+    boolean forceFail
+) {}
 
-{
-  "notificationType": "EVALUATION_COMPLETED",
-  "channel": "email",
-  "recipients": [
-    { "email": "estudiante@unicauca.edu.co", "role": "STUDENT" },
-    { "email": "docente.director@unicauca.edu.co", "role": "ADVISOR" }
-  ],
-  "businessContext": {
-    "projectTitle": "Sistema de Gestión Académica",
-    "documentType": "ANTEPROYECTO",
-    "evaluationResult": "APPROVED",
-    "evaluatedBy": "Dr. María González",
-    "evaluationDate": "2025-10-30T15:00:00"
-  }
+// NotificationType.java
+public enum NotificationType {
+    DOCUMENT_SUBMITTED,
+    EVALUATION_COMPLETED,
+    STATUS_CHANGED,
+    EVALUATOR_ASSIGNED,
+    DEADLINE_REMINDER
+}
+
+// Recipient.java
+public record Recipient(
+    String email,
+    String role,
+    String name
+) {
+    public Recipient(String email) {
+        this(email, null, null);
+    }
 }
 ```
 
-### Progress Tracking Service (CQRS Read Model)
+---
 
-**Escenario**: Notificar cambios de estado importantes
+## 🚀 Casos de Uso: Integración por Requisito Funcional
+
+### **RF2 & RF4: Notificar al Coordinador cuando se Sube Formato A**
+
+**Escenario:** Submission Service envía Formato A (versión 1, 2 o 3)
 
 ```java
-NotificationRequest request = new NotificationRequest(
-    NotificationType.STATUS_CHANGED,
-    "email",
-    List.of(
-        new Recipient("estudiante@unicauca.edu.co", "STUDENT")
-    ),
-    Map.of(
-        "projectTitle", "Sistema de Gestión Académica",
-        "currentStatus", "APROBADO",
-        "previousStatus", "EN_REVISION",
-        "changeDate", LocalDateTime.now().toString()
-    ),
-    null,
-    null,
-    false
-);
+package com.submission.service;
 
-rabbitTemplate.convertAndSend("notification.queue", request);
-```
+import com.submission.dto.NotificationRequest;
+import com.submission.dto.NotificationType;
+import com.submission.dto.Recipient;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.stereotype.Service;
 
-**HTTP Endpoint**:
-```http
-POST http://localhost:8083/notifications/async
-Content-Type: application/json
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
-{
-  "notificationType": "STATUS_CHANGED",
-  "channel": "email",
-  "recipients": [
-    { "email": "estudiante@unicauca.edu.co", "role": "STUDENT" }
-  ],
-  "businessContext": {
-    "projectTitle": "Sistema de Gestión Académica",
-    "currentStatus": "APROBADO",
-    "previousStatus": "EN_REVISION",
-    "changeDate": "2025-10-30T16:00:00"
-  }
+@Service
+public class FormatoASubmissionService {
+    
+    private final RabbitTemplate rabbitTemplate;
+    private static final String NOTIFICATIONS_QUEUE = "notifications.q";
+    
+    public FormatoASubmissionService(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+    }
+    
+    /**
+     * Envía notificación al coordinador después de subir Formato A
+     */
+    public void notifyCoordinatorFormatoASubmitted(
+            String projectTitle,
+            int documentVersion,
+            String submittedByName,
+            String coordinatorEmail
+    ) {
+        NotificationRequest notification = new NotificationRequest(
+            NotificationType.DOCUMENT_SUBMITTED,
+            "email",
+            List.of(new Recipient(coordinatorEmail, "COORDINATOR", null)),
+            Map.of(
+                "projectTitle", projectTitle,
+                "documentType", "FORMATO_A",
+                "submittedBy", submittedByName,
+                "submissionDate", LocalDateTime.now().toString(),
+                "documentVersion", documentVersion
+            ),
+            null,  // Usa plantilla por defecto
+            null,  // Usa template ID por defecto
+            false  // No forzar fallo
+        );
+        
+        rabbitTemplate.convertAndSend(NOTIFICATIONS_QUEUE, notification);
+    }
 }
 ```
 
-## 🧪 Pruebas Rápidas con Postman
+**Uso desde el Controller:**
 
-### Configuración Inicial
+```java
+@PostMapping("/formato-a")
+public ResponseEntity<FormatoAResponse> submitFormatoA(
+        @RequestBody FormatoARequest request,
+        @AuthenticationPrincipal UserDetails userDetails
+) {
+    // 1. Guardar Formato A en base de datos
+    FormatoA formatoA = formatoAService.save(request);
+    
+    // 2. Obtener email del coordinador
+    String coordinatorEmail = userService.getCoordinatorEmail(request.programId());
+    
+    // 3. Enviar notificación ASÍNCRONA
+    notificationService.notifyCoordinatorFormatoASubmitted(
+        formatoA.getProjectTitle(),
+        formatoA.getVersion(),
+        userDetails.getUsername(),
+        coordinatorEmail
+    );
+    
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+}
+```
 
-1. **Importar Colección**: Puedes importar el archivo `postman_collection.json` incluido en este proyecto
-2. **Variables de Entorno**:
-   - `base_url`: `http://localhost:8083`
+---
 
-### ⚠️ IMPORTANTE - Estructura del JSON
+### **RF3: Notificar a Docentes/Estudiantes sobre Evaluación Completada**
 
-**Todos los requests deben incluir TODOS los campos del `NotificationRequest` record:**
+**Escenario:** Review Service evalúa Formato A y notifica resultado
+
+```java
+package com.review.service;
+
+import com.review.dto.NotificationRequest;
+import com.review.dto.NotificationType;
+import com.review.dto.Recipient;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class EvaluationNotificationService {
+    
+    private final RabbitTemplate rabbitTemplate;
+    private static final String NOTIFICATIONS_QUEUE = "notifications.q";
+    
+    public EvaluationNotificationService(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+    }
+    
+    /**
+     * Notifica a docentes y estudiantes sobre evaluación completada
+     */
+    public void notifyEvaluationCompleted(
+            String projectTitle,
+            String evaluationResult,  // "APPROVED", "REJECTED", "OBSERVATIONS"
+            String evaluatedByName,
+            List<String> teacherEmails,
+            List<String> studentEmails
+    ) {
+        // Crear lista de destinatarios
+        List<Recipient> recipients = new ArrayList<>();
+        teacherEmails.forEach(email -> 
+            recipients.add(new Recipient(email, "TEACHER", null))
+        );
+        studentEmails.forEach(email -> 
+            recipients.add(new Recipient(email, "STUDENT", null))
+        );
+        
+        NotificationRequest notification = new NotificationRequest(
+            NotificationType.EVALUATION_COMPLETED,
+            "email",
+            recipients,
+            Map.of(
+                "projectTitle", projectTitle,
+                "documentType", "FORMATO_A",
+                "evaluationResult", evaluationResult,
+                "evaluatedBy", evaluatedByName,
+                "evaluationDate", LocalDateTime.now().toString(),
+                "observations", evaluationResult.equals("OBSERVATIONS") 
+                    ? "Revisar observaciones en el sistema" 
+                    : ""
+            ),
+            null,
+            null,
+            false
+        );
+        
+        rabbitTemplate.convertAndSend(NOTIFICATIONS_QUEUE, notification);
+    }
+}
+```
+
+**Uso desde el Controller:**
+
+```java
+@PostMapping("/evaluations/{formatoAId}")
+public ResponseEntity<EvaluationResponse> evaluateFormatoA(
+        @PathVariable String formatoAId,
+        @RequestBody EvaluationRequest request,
+        @AuthenticationPrincipal UserDetails userDetails
+) {
+    // 1. Guardar evaluación
+    Evaluation evaluation = evaluationService.save(formatoAId, request);
+    
+    // 2. Obtener emails de involucrados
+    FormatoA formatoA = formatoAService.findById(formatoAId);
+    List<String> teacherEmails = formatoA.getTeachers().stream()
+        .map(Teacher::getEmail)
+        .toList();
+    List<String> studentEmails = formatoA.getStudents().stream()
+        .map(Student::getEmail)
+        .toList();
+    
+    // 3. Enviar notificación ASÍNCRONA
+    notificationService.notifyEvaluationCompleted(
+        formatoA.getProjectTitle(),
+        evaluation.getResult(),
+        userDetails.getUsername(),
+        teacherEmails,
+        studentEmails
+    );
+    
+    return ResponseEntity.ok(response);
+}
+```
+
+---
+
+### **RF6: Notificar al Jefe de Departamento cuando se Sube Anteproyecto**
+
+**Escenario:** Submission Service envía Anteproyecto
+
+```java
+public void notifyDepartmentHeadAnteproyectoSubmitted(
+        String projectTitle,
+        String submittedByName,
+        String departmentHeadEmail
+) {
+    NotificationRequest notification = new NotificationRequest(
+        NotificationType.DOCUMENT_SUBMITTED,
+        "email",
+        List.of(new Recipient(departmentHeadEmail, "DEPARTMENT_HEAD", null)),
+        Map.of(
+            "projectTitle", projectTitle,
+            "documentType", "ANTEPROYECTO",
+            "submittedBy", submittedByName,
+            "submissionDate", LocalDateTime.now().toString(),
+            "documentVersion", 1
+        ),
+        null,
+        null,
+        false
+    );
+    
+    rabbitTemplate.convertAndSend(NOTIFICATIONS_QUEUE, notification);
+}
+```
+
+---
+
+### **RF7: Notificar a Evaluadores Asignados**
+
+**Escenario:** Review Service asigna evaluadores a un anteproyecto
+
+```java
+public void notifyEvaluatorsAssigned(
+        String projectTitle,
+        String directorName,
+        LocalDate dueDate,
+        List<String> evaluatorEmails
+) {
+    List<Recipient> recipients = evaluatorEmails.stream()
+        .map(email -> new Recipient(email, "EVALUATOR", null))
+        .toList();
+    
+    NotificationRequest notification = new NotificationRequest(
+        NotificationType.EVALUATOR_ASSIGNED,
+        "email",
+        recipients,
+        Map.of(
+            "projectTitle", projectTitle,
+            "documentType", "ANTEPROYECTO",
+            "directorName", directorName,
+            "dueDate", dueDate.toString()
+        ),
+        null,
+        null,
+        false
+    );
+    
+    rabbitTemplate.convertAndSend(NOTIFICATIONS_QUEUE, notification);
+}
+```
+
+---
+
+## 📊 DTOs y Respuestas
+
+### NotificationRequest (Completo)
 
 ```json
-{
-  "notificationType": "...",      // REQUERIDO: Enum NotificationType
-  "channel": "email",             // REQUERIDO: String
-  "recipients": [...],            // REQUERIDO: Array con al menos 1 elemento
-  "businessContext": {...},       // REQUERIDO: Map con contexto de negocio
-  "message": null,                // OPCIONAL: null si no se usa mensaje custom
-  "templateId": null,             // OPCIONAL: null para usar template por defecto
-  "forceFail": false              // OPCIONAL: false en producción
-}
-```
-
-**Estructura de cada Recipient:**
-```json
-{
-  "email": "...",    // REQUERIDO: Email válido
-  "role": "...",     // OPCIONAL: String (COORDINATOR, TEACHER, STUDENT, etc)
-  "name": null       // OPCIONAL: String o null
-}
-```
-
-**Campos del businessContext por tipo de notificación:**
-
-Los campos requeridos en `businessContext` varían según el `notificationType`:
-
-- **DOCUMENT_SUBMITTED**: `projectTitle`, `documentType`, `submittedBy`, `submissionDate`, `documentVersion`
-- **EVALUATION_COMPLETED**: `projectTitle`, `documentType`, `evaluationResult`, `evaluatedBy`, `evaluationDate`
-- **EVALUATOR_ASSIGNED**: `projectTitle`, `documentType`, `directorName`, `dueDate`
-- **STATUS_CHANGED**: `projectTitle`, `currentStatus`, `previousStatus`, `changeDate`
-- **DEADLINE_REMINDER**: `projectTitle`, `pendingActivity`, `dueDate`, `daysRemaining`
-
-> **Nota**: Si omites campos opcionales como `message`, `templateId`, o `forceFail`, debes enviarlos explícitamente como `null` o `false` para evitar errores de deserialización.
-
-### Test 1: Envío Síncrono - Documento Enviado
-
-```http
-POST {{base_url}}/notifications
-Content-Type: application/json
-
 {
   "notificationType": "DOCUMENT_SUBMITTED",
   "channel": "email",
@@ -277,18 +564,13 @@ Content-Type: application/json
     {
       "email": "coordinador@unicauca.edu.co",
       "role": "COORDINATOR",
-      "name": "Dr. Pedro Coordinador"
-    },
-    {
-      "email": "jefe.programa@unicauca.edu.co",
-      "role": "PROGRAM_HEAD",
-      "name": "Dr. Luis Jefe"
+      "name": null
     }
   ],
   "businessContext": {
-    "projectTitle": "Implementación de Sistema de Notificaciones",
+    "projectTitle": "Sistema de Gestión Académica",
     "documentType": "FORMATO_A",
-    "submittedBy": "Juan Pérez Estudiante",
+    "submittedBy": "Juan Pérez",
     "submissionDate": "2025-10-30T10:30:00",
     "documentVersion": 1
   },
@@ -298,402 +580,958 @@ Content-Type: application/json
 }
 ```
 
-**Respuesta Esperada** (200 OK):
+### NotificationResponse (Síncrono - 200 OK)
+
 ```json
 {
   "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "notificationType": "DOCUMENT_SUBMITTED",
   "status": "SENT",
   "correlationId": "req-123456789",
-  "recipientCount": 2,
+  "recipientCount": 1,
   "failedRecipients": [],
-  "timestamp": "2025-10-29T23:45:00"
+  "timestamp": "2025-10-30T10:30:15"
 }
 ```
 
-### Test 2: Envío Asíncrono - Evaluación Completada
+**Posibles valores de `status`:**
+- `"SENT"`: Todos los destinatarios recibieron la notificación
+- `"PARTIALLY_SENT"`: Algunos destinatarios fallaron
+- `"FAILED"`: Todos los destinatarios fallaron
+- `"QUEUED"`: Solo para respuestas asíncronas (en realidad el endpoint `/async` retorna 202 sin body)
+
+### Respuesta Asíncrona (202 ACCEPTED)
 
 ```http
-POST {{base_url}}/notifications/async
-Content-Type: application/json
-
-{
-  "notificationType": "EVALUATION_COMPLETED",
-  "channel": "email",
-  "recipients": [
-    {
-      "email": "estudiante@unicauca.edu.co",
-      "role": "STUDENT",
-      "name": null
-    }
-  ],
-  "businessContext": {
-    "projectTitle": "Implementación de Sistema de Notificaciones",
-    "documentType": "ANTEPROYECTO",
-    "evaluationResult": "APPROVED",
-    "evaluatedBy": "Dra. María González",
-    "evaluationDate": "2025-10-30T15:00:00"
-  },
-  "message": null,
-  "templateId": null,
-  "forceFail": false
-}
+HTTP/1.1 202 Accepted
+X-Correlation-Id: req-123456789
 ```
 
-**Respuesta Esperada** (202 ACCEPTED):
-```
-(Sin body - procesamiento asíncrono)
-```
+**Sin body**. La notificación se procesará en background.
 
-### Test 3: Asignación de Evaluadores
+---
 
-```http
-POST {{base_url}}/notifications
-Content-Type: application/json
+## 🧪 Pruebas con Postman/cURL
 
-{
-  "notificationType": "EVALUATOR_ASSIGNED",
-  "channel": "email",
-  "recipients": [
-    {
-      "email": "evaluador1@unicauca.edu.co",
-      "role": "EVALUATOR",
-      "name": "Dr. Carlos Ruiz"
+### Test 1: Formato A Primera Versión (RF2)
+
+```bash
+curl -X POST http://localhost:8083/notifications/async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notificationType": "DOCUMENT_SUBMITTED",
+    "channel": "email",
+    "recipients": [
+      {
+        "email": "coordinador@unicauca.edu.co",
+        "role": "COORDINATOR",
+        "name": null
+      }
+    ],
+    "businessContext": {
+      "projectTitle": "Sistema de Gestión de Notificaciones",
+      "documentType": "FORMATO_A",
+      "submittedBy": "Juan Pérez Docente",
+      "submissionDate": "2025-10-30T10:30:00",
+      "documentVersion": 1
     },
-    {
-      "email": "evaluador2@unicauca.edu.co",
-      "role": "EVALUATOR",
-      "name": "Dra. Ana Torres"
-    }
-  ],
-  "businessContext": {
-    "projectTitle": "Implementación de Sistema de Notificaciones",
-    "documentType": "ANTEPROYECTO",
-    "directorName": "Dr. Carlos Ruiz",
-    "dueDate": "2025-11-15"
-  },
-  "message": null,
-  "templateId": null,
-  "forceFail": false
-}
+    "message": null,
+    "templateId": null,
+    "forceFail": false
+  }'
 ```
 
-### Test 4: Cambio de Estado
+**Respuesta esperada:** `202 Accepted`
 
-```http
-POST {{base_url}}/notifications/async
-Content-Type: application/json
+**Logs del Notification Service:**
+```
+📧 [EMAIL MOCK ASYNC] Enviando correo a: coordinador@unicauca.edu.co (COORDINATOR)
+   Asunto: DOCUMENT_SUBMITTED - Sistema de Gestión de Notificaciones
+   Mensaje:
+   Estimado(a) Coordinador(a),
+   
+   Se ha recibido un nuevo documento para revisión:
+   
+   Proyecto: Sistema de Gestión de Notificaciones
+   Tipo de documento: FORMATO_A
+   Versión: 1
+   Presentado por: Juan Pérez Docente
+   Fecha de envío: 2025-10-30T10:30:00
+   ...
+```
 
-{
-  "notificationType": "STATUS_CHANGED",
-  "channel": "email",
-  "recipients": [
-    {
-      "email": "estudiante@unicauca.edu.co",
-      "role": "STUDENT",
-      "name": null
+---
+
+### Test 2: Evaluación Completada (RF3)
+
+```bash
+curl -X POST http://localhost:8083/notifications/async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notificationType": "EVALUATION_COMPLETED",
+    "channel": "email",
+    "recipients": [
+      {
+        "email": "docente@unicauca.edu.co",
+        "role": "TEACHER",
+        "name": null
+      },
+      {
+        "email": "estudiante@unicauca.edu.co",
+        "role": "STUDENT",
+        "name": null
+      }
+    ],
+    "businessContext": {
+      "projectTitle": "Sistema de Gestión de Notificaciones",
+      "documentType": "FORMATO_A",
+      "evaluationResult": "APPROVED",
+      "evaluatedBy": "Dra. María González Coordinadora",
+      "evaluationDate": "2025-10-30T15:00:00",
+      "observations": ""
     },
-    {
-      "email": "director@unicauca.edu.co",
-      "role": "ADVISOR",
-      "name": null
-    }
-  ],
-  "businessContext": {
-    "projectTitle": "Implementación de Sistema de Notificaciones",
-    "currentStatus": "APROBADO",
-    "previousStatus": "EN_REVISION",
-    "changeDate": "2025-10-30T16:00:00"
-  },
-  "message": null,
-  "templateId": null,
-  "forceFail": false
+    "message": null,
+    "templateId": null,
+    "forceFail": false
+  }'
+```
+
+---
+
+### Test 3: Formato A Tercera Versión (RF4)
+
+```bash
+curl -X POST http://localhost:8083/notifications/async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notificationType": "DOCUMENT_SUBMITTED",
+    "channel": "email",
+    "recipients": [
+      {
+        "email": "coordinador@unicauca.edu.co",
+        "role": "COORDINATOR",
+        "name": null
+      }
+    ],
+    "businessContext": {
+      "projectTitle": "Sistema de Gestión de Notificaciones",
+      "documentType": "FORMATO_A",
+      "submittedBy": "Juan Pérez Docente",
+      "submissionDate": "2025-11-05T11:00:00",
+      "documentVersion": 3
+    },
+    "message": null,
+    "templateId": null,
+    "forceFail": false
+  }'
+```
+
+---
+
+## 🔒 Seguridad y Mejores Prácticas
+
+### 1️⃣ Validación de Inputs
+
+✅ Ya implementado con `@Valid` y Jakarta Validation en `NotificationRequest`
+
+### 2️⃣ Manejo de Errores
+
+```java
+// En microservicios productores
+try {
+    rabbitTemplate.convertAndSend(NOTIFICATIONS_QUEUE, notification);
+    log.info("Notification queued successfully");
+} catch (AmqpException e) {
+    log.error("Failed to queue notification", e);
+    // Estrategia: Log y continuar (no fallar la operación principal)
+    // Opción alternativa: Implementar fallback local o retry
 }
 ```
 
-### Test 5: Recordatorio de Fecha Límite
+### 3️⃣ Correlation ID
 
-```http
-POST {{base_url}}/notifications
-Content-Type: application/json
+```java
+// Propagar Correlation ID desde otros microservicios
+import org.slf4j.MDC;
 
-{
-  "notificationType": "DEADLINE_REMINDER",
-  "channel": "email",
-  "recipients": [
-    {
-      "email": "estudiante@unicauca.edu.co",
-      "role": "STUDENT",
-      "name": null
-    }
-  ],
-  "businessContext": {
-    "projectTitle": "Implementación de Sistema de Notificaciones",
-    "pendingActivity": "Entrega de Anteproyecto",
-    "dueDate": "2025-11-15",
-    "daysRemaining": 16
-  },
-  "message": null,
-  "templateId": null,
-  "forceFail": false
+String correlationId = MDC.get("correlationId");
+if (correlationId == null) {
+    correlationId = UUID.randomUUID().toString();
 }
+
+MessagePostProcessor processor = message -> {
+    message.getMessageProperties().setHeader("X-Correlation-Id", correlationId);
+    return message;
+};
+
+rabbitTemplate.convertAndSend(NOTIFICATIONS_QUEUE, notification, processor);
 ```
 
-### Test 6: Health Check
+### 4️⃣ Reintentos y Dead Letter Queue
 
-```http
-GET {{base_url}}/actuator/health
+✅ Ya configurado en `NotificationConsumer`:
+- 1 reintento con delay de 5 segundos
+- Luego envía a DLQ (`notifications.dlq`)
+
+**Monitoreo de DLQ:**
+
+```bash
+# Acceder a RabbitMQ Management
+http://localhost:15672
+
+# User: guest
+# Password: guest
+
+# Ver mensajes en Dead Letter Queue
+# Queues → notifications.dlq → Get messages
 ```
 
-**Respuesta Esperada**:
+---
+
+## 📈 Monitoreo y Observabilidad
+
+### Logs Estructurados
+
+El Notification Service genera logs en formato JSON con los siguientes campos:
+
 ```json
+{
+  "timestamp": "2025-10-30T10:30:15.123",
+  "level": "INFO",
+  "logger": "NOTIFICATION_LOGGER",
+  "event": "NOTIFICATION_SENT",
+  "type": "EMAIL",
+  "recipient": "coordinador@unicauca.edu.co",
+  "correlationId": "req-123456789",
+  "mode": "ASYNC",
+  "status": "SENT"
+}
+```
+
+### Health Checks
+
+```bash
+# Verificar estado del servicio
+curl http://localhost:8083/actuator/health
+
+# Respuesta esperada
 {
   "status": "UP"
 }
 ```
 
-## 🔧 Configuración
-
-### Variables de Entorno
+### Métricas RabbitMQ
 
 ```bash
-# Servidor
-SERVER_PORT=8083
+# Management UI
+http://localhost:15672
 
-# RabbitMQ
-RABBITMQ_HOST=localhost
-RABBITMQ_PORT=5672
-RABBITMQ_USERNAME=guest
-RABBITMQ_PASSWORD=guest
-
-# JWT (para autenticación si es necesario)
-JWT_SECRET=your-secret-key-here
-
-# Configuración de Email (cuando se implemente envío real)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=noreply@trabajogrado.com
-
-# Features (Decorators)
-NOTIFICATIONS_FEATURES_VALIDATION=true
-NOTIFICATIONS_FEATURES_LOGGING=true
-
-# Mock Mode (para desarrollo)
-NOTIFICATION_MAIL_MOCK=true
+# Métricas importantes:
+# - Messages ready (en cola esperando)
+# - Messages unacknowledged (siendo procesados)
+# - Publish rate (mensajes/seg publicados)
+# - Deliver rate (mensajes/seg entregados)
 ```
 
-### application.yml
+---
 
+## ⚠️ Limitaciones y Consideraciones
+
+### 1️⃣ Mock de Email
+
+**Estado actual:** `NOTIFICATION_MAIL_MOCK=true`
+
+Los emails se simulan con logs. Para producción:
+
+1. Agregar dependencias SMTP:
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-mail</artifactId>
+</dependency>
+```
+
+2. Configurar SMTP en `application.yml`:
 ```yaml
 spring:
-  application:
-    name: notification-service
-  
-  rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
-
-server:
-  port: ${SERVER_PORT:8083}
-
-notification:
   mail:
-    mock: ${NOTIFICATION_MAIL_MOCK:true}
-  from:
-    email: noreply@trabajogrado.com
-    name: "Sistema Trabajo de Grado"
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 ```
 
-## 🚀 Instalación y Ejecución
+3. Modificar `BaseNotifierService.sendToRecipient()` para enviar emails reales
 
-### Requisitos Previos
-- Java 21+
-- Maven 3.8+
-- RabbitMQ 3.x (ejecutándose)
+### 2️⃣ Sin Persistencia
 
-### Ejecución Local
+El servicio NO guarda historial de notificaciones. Si necesitas auditoría:
 
-```bash
-# 1. Clonar el repositorio
-git clone <repository-url>
-cd notification-service
-
-# 2. Compilar
-mvnw clean install
-
-# 3. Ejecutar
-mvnw spring-boot:run
-```
-
-### Con Docker
-
-```bash
-# Construir imagen
-docker build -t notification-service .
-
-# Ejecutar
-docker run -p 8083:8083 \
-  -e RABBITMQ_HOST=rabbitmq \
-  -e RABBITMQ_USERNAME=guest \
-  -e RABBITMQ_PASSWORD=guest \
-  notification-service
-```
-
-### Con Docker Compose
-
-```bash
-docker-compose up -d
-```
-
-## 📊 Monitoreo y Logs
-
-### Endpoints de Actuator
-
-- Health: `GET /actuator/health`
-- Info: `GET /actuator/info`
-- Metrics: `GET /actuator/metrics`
-
-### Logs Estructurados
-
-Los logs incluyen:
-- **correlationId**: Para trazar requests a través de microservicios
-- **notificationType**: Tipo de notificación
-- **channel**: Canal de envío
-- **recipients**: Destinatarios
-- **status**: Estado del envío
-
-Ejemplo:
-```json
-{
-  "timestamp": "2025-10-29T23:45:00",
-  "level": "INFO",
-  "logger": "LoggingNotifierDecorator",
-  "message": "Notification sent successfully",
-  "correlationId": "req-123456789",
-  "notificationType": "DOCUMENT_SUBMITTED",
-  "channel": "email",
-  "recipients": "coordinador@unicauca.edu.co, jefe.programa@unicauca.edu.co",
-  "status": "SENT"
-}
-```
-
-## 🔐 Seguridad
-
-### Filtro de Contexto
-
-El servicio incluye un filtro (`RequestContextFilter`) que:
-- Genera `correlationId` para cada request
-- Extrae `userId` del contexto (si está disponible)
-- Propaga información de contexto vía MDC (Mapped Diagnostic Context)
-
-### Validación
-
-- Validación de campos requeridos (JSR-303/Jakarta Validation)
-- Validación de negocio (ej: contexto requerido según tipo de notificación)
-- Sanitización de parámetros
-
-## 🧩 Extensibilidad
-
-### Agregar Nuevo Tipo de Notificación
-
-1. **Agregar enum**:
+**Opción 1:** Agregar decorador de persistencia
 ```java
-public enum NotificationType {
-    DOCUMENT_SUBMITTED,
-    EVALUATION_COMPLETED,
-    // ... existentes
-    NEW_TYPE  // ← Nuevo tipo
-}
-```
-
-2. **Crear plantilla** en `TemplateService`:
-```java
-private String getNewTypeTemplate() {
-    return """
-        Nuevo Tipo de Notificación
-        
-        Proyecto: {{projectTitle}}
-        ...
-        """;
-}
-```
-
-3. **Usar desde otros microservicios**:
-```java
-NotificationRequest request = new NotificationRequest(
-    NotificationType.NEW_TYPE,
-    "email",
-    recipients,
-    context,
-    null, null, false
-);
-```
-
-### Agregar Nuevo Canal
-
-Extender `BaseNotifierService.sendToRecipient()` con lógica para el nuevo canal.
-
-## 📚 Modelos de Datos
-
-### NotificationRequest
-
-```java
-{
-  "notificationType": "DOCUMENT_SUBMITTED",  // Requerido
-  "channel": "email",                        // Requerido: "email" | "sms"
-  "recipients": [                            // Requerido: al menos 1
-    {
-      "email": "user@example.com",
-      "role": "STUDENT"                      // Opcional
+public class PersistenceNotifierDecorator implements Notifier {
+    private final Notifier wrapped;
+    private final NotificationRepository repository;
+    
+    @Override
+    public NotificationResponse sendSync(NotificationRequest request) {
+        NotificationResponse response = wrapped.sendSync(request);
+        repository.save(toEntity(request, response));
+        return response;
     }
-  ],
-  "businessContext": {                       // Requerido: Map<String, Object>
-    "projectId": "uuid",
-    "projectTitle": "string",
-    // ... campos específicos del tipo
-  },
-  "message": "string",                       // Opcional: mensaje custom
-  "templateId": "string",                    // Opcional: ID de plantilla
-  "forceFail": false                         // Opcional: para testing
 }
 ```
 
-### NotificationResponse
+**Opción 2:** Delegar auditoría al Progress Tracking Service (RECOMENDADO)
+- Progress Tracking escucha eventos de RabbitMQ
+- Mantiene el historial completo de notificaciones
+- Notification Service permanece sin estado
+
+### 3️⃣ Escalabilidad
+
+**Para entornos de alta carga:**
+
+```yaml
+# docker-compose.yml
+notification-service:
+  deploy:
+    replicas: 3  # Múltiples instancias consumiendo
+  environment:
+    - SPRING_RABBITMQ_LISTENER_SIMPLE_CONCURRENCY=5
+    - SPRING_RABBITMQ_LISTENER_SIMPLE_MAX_CONCURRENCY=10
+```
+
+**RabbitMQ distribuirá mensajes entre instancias automáticamente.**
+
+### 4️⃣ Plantillas Personalizadas
+
+Si necesitas plantillas específicas por programa:
 
 ```java
-{
-  "id": "uuid",
-  "notificationType": "DOCUMENT_SUBMITTED",
-  "status": "SENT",                          // "SENT" | "PARTIALLY_SENT" | "FAILED"
-  "correlationId": "req-123456789",
-  "recipientCount": 2,
-  "failedRecipients": [],
-  "timestamp": "2025-10-29T23:45:00"
+// En businessContext
+"programId": "ingenieria-sistemas",
+"customTemplate": "formato_a_sistemas"
+
+// En TemplateService
+if (context.containsKey("customTemplate")) {
+    templateId = (String) context.get("customTemplate");
 }
 ```
 
-## 🤝 Contribución
+---
 
-1. Fork del proyecto
-2. Crear branch para feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit cambios (`git commit -am 'Agregar nueva funcionalidad'`)
-4. Push al branch (`git push origin feature/nueva-funcionalidad`)
-5. Crear Pull Request
+## 🔧 Troubleshooting
 
-## 📄 Licencia
+### Problema 1: Mensajes no se consumen
 
-Este proyecto es parte del Sistema de Gestión de Trabajos de Grado de la Universidad del Cauca.
+**Síntomas:**
+- RabbitMQ muestra mensajes en `notifications.q`
+- Notification Service no los procesa
+
+**Solución:**
+```bash
+# Verificar logs del Notification Service
+docker logs notification-service
+
+# Verificar conexión a RabbitMQ
+docker exec notification-service curl -f rabbitmq:5672 || echo "No connection"
+
+# Reiniciar servicio
+docker restart notification-service
+```
+
+### Problema 2: Mensajes van a DLQ inmediatamente
+
+**Síntomas:**
+- Todos los mensajes terminan en `notifications.dlq`
+- Logs muestran errores de validación
+
+**Solución:**
+```bash
+# Revisar mensaje en DLQ desde Management UI
+# Verificar estructura del JSON
+# Asegurar que todos los campos requeridos estén presentes
+
+# Ejemplo de error común:
+# - Missing "businessContext.projectTitle"
+# - Invalid email format in recipients
+```
+
+### Problema 3: Serialization/Deserialization Errors
+
+**Síntomas:**
+```
+Could not read JSON: Cannot construct instance of NotificationRequest
+```
+
+**Solución:**
+```java
+// Asegurar que los DTOs sean IDÉNTICOS en todos los microservicios
+// Verificar:
+// 1. Nombres de campos
+// 2. Tipos de datos
+// 3. Constructores
+// 4. Usar records en lugar de clases tradicionales
+
+// ✅ CORRECTO
+public record NotificationRequest(
+    NotificationType notificationType,
+    String channel,
+    List<Recipient> recipients,
+    Map<String, Object> businessContext,
+    String message,
+    String templateId,
+    boolean forceFail
+) {}
+
+// ❌ INCORRECTO (nombres diferentes)
+public record NotificationRequest(
+    NotificationType type,  // ← Diferente nombre
+    String channelType,     // ← Diferente nombre
+    ...
+) {}
+```
+
+---
+
+## 📚 Ejemplos Completos de Integración
+
+### Ejemplo Completo: Submission Service
+
+```java
+// ══════════════════════════════════════════════════════
+// 1. Configuration
+// ══════════════════════════════════════════════════════
+package com.submission.config;
+
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitMQConfig {
+    
+    public static final String NOTIFICATIONS_QUEUE = "notifications.q";
+    
+    @Bean
+    public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
+        return new Jackson2JsonMessageConverter();
+    }
+    
+    @Bean
+    public RabbitTemplate rabbitTemplate(
+            ConnectionFactory connectionFactory,
+            Jackson2JsonMessageConverter converter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(converter);
+        return template;
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// 2. Notification Service
+// ══════════════════════════════════════════════════════
+package com.submission.service;
+
+import com.submission.config.RabbitMQConfig;
+import com.submission.dto.NotificationRequest;
+import com.submission.dto.NotificationType;
+import com.submission.dto.Recipient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpException;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class NotificationPublisher {
+    
+    private static final Logger log = LoggerFactory.getLogger(NotificationPublisher.class);
+    private final RabbitTemplate rabbitTemplate;
+    
+    public NotificationPublisher(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+    }
+    
+    /**
+     * Notifica documento enviado (Formato A o Anteproyecto)
+     */
+    public void notifyDocumentSubmitted(
+            String projectTitle,
+            String documentType,  // "FORMATO_A" | "ANTEPROYECTO"
+            int version,
+            String submittedByName,
+            String recipientEmail,
+            String recipientRole     // "COORDINATOR" | "DEPARTMENT_HEAD"
+    ) {
+        try {
+            NotificationRequest notification = new NotificationRequest(
+                NotificationType.DOCUMENT_SUBMITTED,
+                "email",
+                List.of(new Recipient(recipientEmail, recipientRole, null)),
+                Map.of(
+                    "projectTitle", projectTitle,
+                    "documentType", documentType,
+                    "submittedBy", submittedByName,
+                    "submissionDate", LocalDateTime.now().toString(),
+                    "documentVersion", version
+                ),
+                null,
+                null,
+                false
+            );
+            
+            rabbitTemplate.convertAndSend(
+                RabbitMQConfig.NOTIFICATIONS_QUEUE, 
+                notification
+            );
+            
+            log.info("Notification queued: {} for {}", documentType, recipientEmail);
+            
+        } catch (AmqpException e) {
+            log.error("Failed to queue notification for document submission", e);
+            // No fallar la operación principal si la notificación falla
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// 3. Controller con Integración
+// ══════════════════════════════════════════════════════
+package com.submission.controller;
+
+import com.submission.dto.FormatoARequest;
+import com.submission.dto.FormatoAResponse;
+import com.submission.service.FormatoAService;
+import com.submission.service.NotificationPublisher;
+import com.submission.service.UserService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/submissions/formato-a")
+public class FormatoAController {
+    
+    private final FormatoAService formatoAService;
+    private final NotificationPublisher notificationPublisher;
+    private final UserService userService;
+    
+    public FormatoAController(
+            FormatoAService formatoAService,
+            NotificationPublisher notificationPublisher,
+            UserService userService) {
+        this.formatoAService = formatoAService;
+        this.notificationPublisher = notificationPublisher;
+        this.userService = userService;
+    }
+    
+    /**
+     * RF2: Subir Formato A (primera versión)
+     * RF4: Subir nueva versión del Formato A
+     */
+    @PostMapping
+    public ResponseEntity<FormatoAResponse> submitFormatoA(
+            @RequestBody FormatoARequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        
+        // 1. Guardar Formato A
+        FormatoAResponse response = formatoAService.submit(request, userDetails);
+        
+        // 2. Obtener email del coordinador
+        String coordinatorEmail = userService.getCoordinatorEmailByProgram(
+            request.programId()
+        );
+        
+        // 3. Enviar notificación ASÍNCRONA
+        notificationPublisher.notifyDocumentSubmitted(
+            response.projectTitle(),
+            "FORMATO_A",
+            response.version(),
+            userDetails.getUsername(),
+            coordinatorEmail,
+            "COORDINATOR"
+        );
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+    
+    /**
+     * RF6: Subir Anteproyecto
+     */
+    @PostMapping("/anteproyecto")
+    public ResponseEntity<AnteproyectoResponse> submitAnteproyecto(
+            @RequestBody AnteproyectoRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        
+        // 1. Verificar que Formato A esté aprobado
+        if (!formatoAService.isApproved(request.formatoAId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
+        // 2. Guardar Anteproyecto
+        AnteproyectoResponse response = formatoAService.submitAnteproyecto(
+            request, 
+            userDetails
+        );
+        
+        // 3. Obtener email del jefe de departamento
+        String departmentHeadEmail = userService.getDepartmentHeadEmail(
+            request.programId()
+        );
+        
+        // 4. Enviar notificación ASÍNCRONA
+        notificationPublisher.notifyDocumentSubmitted(
+            response.projectTitle(),
+            "ANTEPROYECTO",
+            1,  // Primera versión
+            userDetails.getUsername(),
+            departmentHeadEmail,
+            "DEPARTMENT_HEAD"
+        );
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+}
+```
+
+---
+
+### Ejemplo Completo: Review Service
+
+```java
+// ══════════════════════════════════════════════════════
+// Review Service - Notification Publisher
+// ══════════════════════════════════════════════════════
+package com.review.service;
+
+import com.review.config.RabbitMQConfig;
+import com.review.dto.NotificationRequest;
+import com.review.dto.NotificationType;
+import com.review.dto.Recipient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpException;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class ReviewNotificationPublisher {
+    
+    private static final Logger log = LoggerFactory.getLogger(ReviewNotificationPublisher.class);
+    private final RabbitTemplate rabbitTemplate;
+    
+    public ReviewNotificationPublisher(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+    }
+    
+    /**
+     * RF3: Notificar evaluación completada
+     */
+    public void notifyEvaluationCompleted(
+            String projectTitle,
+            String evaluationResult,  // "APPROVED" | "REJECTED" | "OBSERVATIONS"
+            String evaluatedByName,
+            List<String> teacherEmails,
+            List<String> studentEmails,
+            String observations
+    ) {
+        try {
+            // Crear lista de destinatarios
+            List<Recipient> recipients = new ArrayList<>();
+            teacherEmails.forEach(email -> 
+                recipients.add(new Recipient(email, "TEACHER", null))
+            );
+            studentEmails.forEach(email -> 
+                recipients.add(new Recipient(email, "STUDENT", null))
+            );
+            
+            NotificationRequest notification = new NotificationRequest(
+                NotificationType.EVALUATION_COMPLETED,
+                "email",
+                recipients,
+                Map.of(
+                    "projectTitle", projectTitle,
+                    "documentType", "FORMATO_A",
+                    "evaluationResult", evaluationResult,
+                    "evaluatedBy", evaluatedByName,
+                    "evaluationDate", LocalDateTime.now().toString(),
+                    "observations", observations != null ? observations : ""
+                ),
+                null,
+                null,
+                false
+            );
+            
+            rabbitTemplate.convertAndSend(
+                RabbitMQConfig.NOTIFICATIONS_QUEUE, 
+                notification
+            );
+            
+            log.info("Evaluation notification queued for project: {}", projectTitle);
+            
+        } catch (AmqpException e) {
+            log.error("Failed to queue evaluation notification", e);
+        }
+    }
+    
+    /**
+     * RF7: Notificar asignación de evaluadores
+     */
+    public void notifyEvaluatorsAssigned(
+            String projectTitle,
+            String directorName,
+            String dueDate,
+            List<String> evaluatorEmails
+    ) {
+        try {
+            List<Recipient> recipients = evaluatorEmails.stream()
+                .map(email -> new Recipient(email, "EVALUATOR", null))
+                .toList();
+            
+            NotificationRequest notification = new NotificationRequest(
+                NotificationType.EVALUATOR_ASSIGNED,
+                "email",
+                recipients,
+                Map.of(
+                    "projectTitle", projectTitle,
+                    "documentType", "ANTEPROYECTO",
+                    "directorName", directorName,
+                    "dueDate", dueDate
+                ),
+                null,
+                null,
+                false
+            );
+            
+            rabbitTemplate.convertAndSend(
+                RabbitMQConfig.NOTIFICATIONS_QUEUE, 
+                notification
+            );
+            
+            log.info("Evaluator assignment notification queued for {} evaluators", 
+                evaluatorEmails.size());
+            
+        } catch (AmqpException e) {
+            log.error("Failed to queue evaluator assignment notification", e);
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// Review Controller
+// ══════════════════════════════════════════════════════
+package com.review.controller;
+
+import com.review.dto.EvaluationRequest;
+import com.review.dto.EvaluationResponse;
+import com.review.dto.EvaluatorAssignmentRequest;
+import com.review.service.EvaluationService;
+import com.review.service.ReviewNotificationPublisher;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/evaluations")
+public class EvaluationController {
+    
+    private final EvaluationService evaluationService;
+    private final ReviewNotificationPublisher notificationPublisher;
+    
+    public EvaluationController(
+            EvaluationService evaluationService,
+            ReviewNotificationPublisher notificationPublisher) {
+        this.evaluationService = evaluationService;
+        this.notificationPublisher = notificationPublisher;
+    }
+    
+    /**
+     * RF3: Evaluar Formato A
+     */
+    @PostMapping("/formato-a/{formatoAId}")
+    public ResponseEntity<EvaluationResponse> evaluateFormatoA(
+            @PathVariable String formatoAId,
+            @RequestBody EvaluationRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        
+        // 1. Guardar evaluación
+        EvaluationResponse response = evaluationService.evaluate(
+            formatoAId, 
+            request, 
+            userDetails
+        );
+        
+        // 2. Enviar notificación ASÍNCRONA
+        notificationPublisher.notifyEvaluationCompleted(
+            response.projectTitle(),
+            response.result(),
+            userDetails.getUsername(),
+            response.teacherEmails(),
+            response.studentEmails(),
+            response.observations()
+        );
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * RF7: Asignar evaluadores a anteproyecto
+     */
+    @PostMapping("/anteproyecto/{anteproyectoId}/evaluators")
+    public ResponseEntity<Void> assignEvaluators(
+            @PathVariable String anteproyectoId,
+            @RequestBody EvaluatorAssignmentRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        
+        // 1. Asignar evaluadores
+        evaluationService.assignEvaluators(anteproyectoId, request);
+        
+        // 2. Enviar notificación ASÍNCRONA
+        notificationPublisher.notifyEvaluatorsAssigned(
+            request.projectTitle(),
+            request.directorName(),
+            LocalDate.now().plusDays(15).toString(),  // 15 días para evaluar
+            request.evaluatorEmails()
+        );
+        
+        return ResponseEntity.ok().build();
+    }
+}
+```
+
+---
+
+## 🎯 Checklist de Integración
+
+### Para cada microservicio que necesite enviar notificaciones:
+
+- [ ] **1. Agregar dependencias Maven**
+    - `spring-boot-starter-amqp`
+    - `jackson-databind`
+
+- [ ] **2. Crear DTOs idénticos**
+    - `NotificationRequest.java`
+    - `NotificationType.java`
+    - `Recipient.java`
+
+- [ ] **3. Configurar RabbitMQ**
+    - `application.yml` con credenciales
+    - `RabbitMQConfig.java` con Queue y Converter
+
+- [ ] **4. Crear servicio de publicación**
+    - `NotificationPublisher.java`
+    - Métodos específicos por caso de uso
+
+- [ ] **5. Integrar en controllers**
+    - Llamar a `notificationPublisher` después de operaciones exitosas
+    - Usar try-catch para no fallar operación principal
+
+- [ ] **6. Configurar Docker Compose**
+    - Conectar a red compartida
+    - Variables de entorno de RabbitMQ
+    - `depends_on: rabbitmq`
+
+- [ ] **7. Probar integración**
+    - Ejecutar operación que dispara notificación
+    - Verificar logs del Notification Service
+    - Revisar RabbitMQ Management UI
+
+---
+
+## 📖 Resumen Ejecutivo
+
+### ✅ Estado del Microservicio
+
+El Notification Service está **listo para producción** para el PMV con las siguientes características:
+
+**Fortalezas:**
+- ✅ Arquitectura limpia con patrón Decorator
+- ✅ Soporte para notificaciones síncronas y asíncronas
+- ✅ Sistema de plantillas dinámicas
+- ✅ Reintentos automáticos y DLQ
+- ✅ Logging estructurado con Correlation ID
+- ✅ Health checks y monitoreo
+
+**Limitaciones:**
+- ⚠️ Mock de email (requiere SMTP real para producción)
+- ⚠️ Sin persistencia de historial (delegar a Progress Tracking)
+
+### 🎯 Cobertura de Requisitos Funcionales
+
+| RF | Descripción | Estado | Tipo de Notificación |
+|----|-------------|--------|---------------------|
+| RF2 | Notificar coordinador al subir Formato A | ✅ Cubierto | `DOCUMENT_SUBMITTED` |
+| RF3 | Notificar evaluación completada | ✅ Cubierto | `EVALUATION_COMPLETED` |
+| RF4 | Notificar nueva versión Formato A | ✅ Cubierto | `DOCUMENT_SUBMITTED` |
+| RF5 | Ver estado (notificación de cambios) | ✅ Cubierto | `STATUS_CHANGED` |
+| RF6 | Notificar jefe al subir Anteproyecto | ✅ Cubierto | `DOCUMENT_SUBMITTED` |
+| RF7 | Notificar evaluadores asignados | ✅ Cubierto | `EVALUATOR_ASSIGNED` |
+
+### 🏗️ Arquitectura Recomendada
+
+```
+                    ┌─────────────────────┐
+                    │   RabbitMQ          │
+                    │   (Compartido)      │
+                    └──────────┬──────────┘
+                               │
+        ┌──────────────────────┼──────────────────────┐
+        │                      │                      │
+        ▼                      ▼                      ▼
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│  Submission   │     │    Review     │     │   Progress    │
+│   Service     │     │    Service    │     │   Tracking    │
+│  (Producer)   │     │  (Producer)   │     │  (Producer)   │
+└───────────────┘     └───────────────┘     └───────────────┘
+        │                      │                      │
+        └──────────────────────┼──────────────────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │  Notification       │
+                    │  Service            │
+                    │  (Consumer)         │
+                    └─────────────────────┘
+```
+
+**Decisión:** ✅ **Una sola instancia de RabbitMQ para todos los microservicios**
+
+---
 
 ## 📞 Contacto y Soporte
 
-Para preguntas o soporte, contactar al equipo de desarrollo.
+Para preguntas sobre integración o problemas:
+1. Revisar logs estructurados en Notification Service
+2. Consultar RabbitMQ Management UI (`http://localhost:15672`)
+3. Verificar mensajes en DLQ para debugging
 
 ---
 
 **Versión**: 1.0.0  
-**Última actualización**: Octubre 2025
-
+**Última actualización**: Octubre 2025  
+**Estado**: ✅ Listo para PMV
