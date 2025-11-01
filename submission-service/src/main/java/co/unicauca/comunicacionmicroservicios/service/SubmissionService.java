@@ -246,8 +246,7 @@ public class SubmissionService implements ISubmissionService {
             proyectoRepo.save(proyecto);
             formatoRepo.save(formato);
 
-            // RF3: Notificar a docentes y estudiantes sobre la evaluación (APROBADO)
-            notificarEvaluacionCompletada(proyecto, "APROBADO", req.getEvaluadoPor(), req.getObservaciones());
+            // Nota: Las notificaciones de evaluación completada son responsabilidad del review-service
 
             return;
         }
@@ -258,8 +257,7 @@ public class SubmissionService implements ISubmissionService {
             proyectoRepo.save(proyecto);
             formatoRepo.save(formato);
 
-            // RF3: Notificar a docentes y estudiantes sobre la evaluación (RECHAZADO)
-            notificarEvaluacionCompletada(proyecto, "RECHAZADO", req.getEvaluadoPor(), req.getObservaciones());
+            // Nota: Las notificaciones de evaluación completada son responsabilidad del review-service
 
             // Si este rechazo ocurre en el 3er intento => Rechazo definitivo
             if (Objects.equals(proyecto.getNumeroIntentos(), 3)) {
@@ -296,54 +294,6 @@ public class SubmissionService implements ISubmissionService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado inválido para evaluación");
     }
 
-    /**
-     * RF3: Notifica a docentes y estudiantes cuando se completa una evaluación.
-     * Esta notificación se envía tanto cuando se aprueba como cuando se rechaza el Formato A.
-     */
-    private void notificarEvaluacionCompletada(
-            ProyectoGrado proyecto,
-            String resultado,
-            String evaluadoPor,
-            String observaciones
-    ) {
-        try {
-            // Recopilar emails de docentes (director y codirector)
-            List<String> docenteEmails = new ArrayList<>();
-            if (proyecto.getDirectorId() != null) {
-                docenteEmails.add(identityClient.getUserEmail(proyecto.getDirectorId().toString()));
-            }
-            if (proyecto.getCodirectorId() != null) {
-                docenteEmails.add(identityClient.getUserEmail(proyecto.getCodirectorId().toString()));
-            }
-
-            // Recopilar emails de estudiantes
-            List<String> estudianteEmails = new ArrayList<>();
-            if (proyecto.getEstudiante1Id() != null) {
-                estudianteEmails.add(identityClient.getUserEmail(proyecto.getEstudiante1Id().toString()));
-            }
-            if (proyecto.getEstudiante2Id() != null) {
-                estudianteEmails.add(identityClient.getUserEmail(proyecto.getEstudiante2Id().toString()));
-            }
-
-            // Enviar notificación usando NotificationPublisher
-            notificationPublisher.notificarEvaluacionCompletada(
-                    proyecto.getId(),
-                    proyecto.getTitulo(),
-                    resultado,
-                    evaluadoPor,
-                    observaciones != null ? observaciones : "",
-                    docenteEmails,
-                    estudianteEmails
-            );
-
-            log.info("RF3: Notificación de evaluación enviada a {} docentes y {} estudiantes para proyecto {}",
-                    docenteEmails.size(), estudianteEmails.size(), proyecto.getId());
-
-        } catch (Exception e) {
-            log.error("Error al enviar notificación de evaluación para proyecto {}", proyecto.getId(), e);
-            // No lanzamos excepción para no afectar la operación principal
-        }
-    }
 
     // ---------------------------
     // RF6: Subir Anteproyecto

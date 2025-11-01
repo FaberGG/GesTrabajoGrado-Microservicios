@@ -38,7 +38,7 @@ file:
 
 # Cliente HTTP para Identity Service
 identity:
-  base-url: ${IDENTITY_SERVICE_URL:http://identity:8081/api}
+  base-url: ${IDENTITY_SERVICE_URL:http://identity:8081}
   timeout-ms: 3000
 
 # Configuración de notificaciones

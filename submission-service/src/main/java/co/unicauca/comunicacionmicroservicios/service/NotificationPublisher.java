@@ -27,9 +27,10 @@ import java.util.UUID;
  *
  * REQUISITOS FUNCIONALES:
  * - RF2: Notificar al coordinador cuando se envía Formato A (v1)
- * - RF3: Notificar a docentes y estudiantes cuando se evalúa Formato A
  * - RF4: Notificar al coordinador cuando se reenvía Formato A (v2, v3)
  * - RF6: Notificar al jefe de departamento cuando se envía anteproyecto
+ *
+ * NOTA: RF3 (Notificar evaluación completada) es ahora responsabilidad del review-service
  */
 @Service
 public class NotificationPublisher {
@@ -59,6 +60,9 @@ public class NotificationPublisher {
             String coordinadorEmail
     ) {
         try {
+            log.info("Preparando notificación Formato A - Proyecto: {}, Versión: {}, Destinatario: {}",
+                    proyectoId, version, coordinadorEmail);
+
             NotificationRequest request = new NotificationRequest(
                     NotificationType.DOCUMENT_SUBMITTED,
                     "email",
@@ -77,11 +81,11 @@ public class NotificationPublisher {
 
             publishNotification(request, "Formato A enviado (v" + version + ")");
 
-            log.info("Notificación Formato A enviada - Proyecto: {}, Versión: {}, Coordinador: {}",
+            log.info("✅ Notificación Formato A procesada - Proyecto: {}, Versión: {}, Coordinador: {}",
                     proyectoId, version, coordinadorEmail);
 
         } catch (Exception e) {
-            log.error("Error al publicar notificación de Formato A - Proyecto: {}, Versión: {}",
+            log.error("❌ Error al publicar notificación de Formato A - Proyecto: {}, Versión: {}",
                     proyectoId, version, e);
             // No lanzamos excepción para no afectar la operación principal
         }
@@ -129,6 +133,10 @@ public class NotificationPublisher {
         }
     }
     /**
+     * DEPRECADO: Este método ya no se usa en submission-service.
+     * La responsabilidad de notificar sobre evaluaciones completadas
+     * ahora pertenece al review-service.
+     *
      * RF3: Notifica a docentes y estudiantes cuando se completa la evaluación de un Formato A.
      * Se envía tanto cuando se aprueba como cuando se rechaza.
      *
@@ -139,7 +147,9 @@ public class NotificationPublisher {
      * @param observaciones Observaciones de la evaluación
      * @param docenteEmails Lista de emails de docentes (director, codirector)
      * @param estudianteEmails Lista de emails de estudiantes
+     * @deprecated Este método ya no se utiliza. La funcionalidad fue movida a review-service.
      */
+    @Deprecated
     public void notificarEvaluacionCompletada(
             Integer proyectoId,
             String titulo,
@@ -266,11 +276,12 @@ public class NotificationPublisher {
                     processor
             );
 
-            log.debug("Notificación publicada a RabbitMQ - Evento: {}, CorrelationId: {}",
-                    eventDescription, finalCorrelationId);
+            log.info("✉️ Notificación publicada a RabbitMQ correctamente - Evento: {}, Cola: {}, CorrelationId: {}, Destinatarios: {}",
+                    eventDescription, RabbitConfig.NOTIFICATIONS_QUEUE, finalCorrelationId,
+                    request.recipients().size());
 
         } catch (AmqpException e) {
-            log.error("Error al enviar mensaje a RabbitMQ - Evento: {}, CorrelationId: {}",
+            log.error("❌ Error al enviar mensaje a RabbitMQ - Evento: {}, CorrelationId: {}",
                     eventDescription, finalCorrelationId, e);
             throw e; // Re-lanzar para que el catch del método padre lo maneje
         }
