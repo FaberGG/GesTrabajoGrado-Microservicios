@@ -4,12 +4,6 @@
          https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>edu.unicauca</groupId>
-    <artifactId>progress-tracking-service</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>Progress Tracking Service</name>
-    <description>Microservicio de seguimiento de progreso de proyectos de grado</description>
-
     <!-- SPRING BOOT -->
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -18,7 +12,6 @@
         <relativePath/> <!-- importante -->
     </parent>
 
-    <!-- DEPENDENCIAS -->
     <groupId>edu.unicauca</groupId>
     <artifactId>progress-tracking-service</artifactId>
     <version>1.0.0</version>
@@ -120,10 +113,6 @@
 
     </dependencies>
 
-    <!-- CONFIGURACIÓN GENERAL -->
-    <properties>
-        <java.version>21</java.version>
-    </properties>
 
     <repositories>
         <repository>
