@@ -3,17 +3,14 @@ package com.unicauca.identity.service;
 import com.unicauca.identity.dto.request.LoginRequest;
 import com.unicauca.identity.dto.request.RegisterRequest;
 import com.unicauca.identity.dto.request.VerifyTokenRequest;
-import com.unicauca.identity.dto.response.LoginResponse;
-import com.unicauca.identity.dto.response.RolesResponse;
-import com.unicauca.identity.dto.response.TokenVerificationResponse;
-import com.unicauca.identity.dto.response.UserResponse;
+import com.unicauca.identity.dto.response.*;
 import com.unicauca.identity.entity.User;
-import com.unicauca.identity.enums.Rol;
 import com.unicauca.identity.enums.Programa;
+import com.unicauca.identity.enums.Rol;
+import com.unicauca.identity.exception.UserNotFoundException;
 import org.springframework.data.domain.Page;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.Optional;
 
 /**
  * Interfaz para el servicio de autenticación
@@ -86,4 +83,41 @@ public interface AuthService {
      * @return Página de usuarios que coinciden con los criterios
      */
     Page<UserResponse> searchUsers(String query, Rol rol, Programa programa, int page, int size);
+
+    /**
+     * Obtiene información básica de un usuario por su ID
+     * (Para comunicación entre microservicios)
+     *
+     * @param userId ID del usuario
+     * @return Información básica del usuario
+     * @throws UserNotFoundException si el usuario no existe
+     */
+    UserBasicInfoDTO getUserBasicInfo(Long userId);
+
+    /**
+     * Obtiene el primer coordinador registrado
+     * (Para envío de notificaciones)
+     *
+     * @return Información básica del coordinador
+     * @throws UserNotFoundException si no hay coordinador registrado
+     */
+    UserBasicInfoDTO getCoordinador();
+
+    /**
+     * Obtiene el primer jefe de departamento registrado
+     * (Para envío de notificaciones)
+     *
+     * @return Información básica del jefe de departamento
+     * @throws UserNotFoundException si no hay jefe de departamento registrado
+     */
+    UserBasicInfoDTO getJefeDepartamento();
+
+    /**
+     * Obtiene el email de un usuario por rol
+     * (Fallback para compatibilidad con código existente)
+     *
+     * @param rol Rol del usuario
+     * @return Email del primer usuario con ese rol
+     */
+    Optional<String> getEmailByRole(Rol rol);
 }

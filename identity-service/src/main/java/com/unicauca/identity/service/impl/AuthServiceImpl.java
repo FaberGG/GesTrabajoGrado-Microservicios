@@ -3,10 +3,7 @@ package com.unicauca.identity.service.impl;
 import com.unicauca.identity.dto.request.LoginRequest;
 import com.unicauca.identity.dto.request.RegisterRequest;
 import com.unicauca.identity.dto.request.VerifyTokenRequest;
-import com.unicauca.identity.dto.response.LoginResponse;
-import com.unicauca.identity.dto.response.RolesResponse;
-import com.unicauca.identity.dto.response.TokenVerificationResponse;
-import com.unicauca.identity.dto.response.UserResponse;
+import com.unicauca.identity.dto.response.*;
 import com.unicauca.identity.entity.User;
 import com.unicauca.identity.enums.Programa;
 import com.unicauca.identity.enums.Rol;
@@ -29,8 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.Callable;
+import java.util.Optional;
 
 /**
  * Implementación del servicio de autenticación
@@ -237,5 +233,57 @@ public class AuthServiceImpl implements AuthService {
             Page<User> users = userRepository.findAll(spec, pageable);
             return users.map(this::mapUserToUserResponse);
         }
+    }
+
+
+    @Override
+    public UserBasicInfoDTO getUserBasicInfo(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        return UserBasicInfoDTO.builder()
+                .id(user.getId())
+                .nombres(user.getNombres())
+                .apellidos(user.getApellidos())
+                .email(user.getEmail())
+                .rol(user.getRol())
+                .programa(user.getPrograma())
+                .build();
+    }
+
+    @Override
+    public UserBasicInfoDTO getCoordinador() {
+        User coordinador = userRepository.findFirstByRol(Rol.COORDINADOR)
+                .orElseThrow(() -> new UserNotFoundException("No se encontró ningún coordinador en el sistema"));
+
+        return UserBasicInfoDTO.builder()
+                .id(coordinador.getId())
+                .nombres(coordinador.getNombres())
+                .apellidos(coordinador.getApellidos())
+                .email(coordinador.getEmail())
+                .rol(coordinador.getRol())
+                .programa(coordinador.getPrograma())
+                .build();
+    }
+
+    @Override
+    public UserBasicInfoDTO getJefeDepartamento() {
+        User jefe = userRepository.findFirstByRol(Rol.JEFE_DEPARTAMENTO)
+                .orElseThrow(() -> new UserNotFoundException("No se encontró ningún jefe de departamento en el sistema"));
+
+        return UserBasicInfoDTO.builder()
+                .id(jefe.getId())
+                .nombres(jefe.getNombres())
+                .apellidos(jefe.getApellidos())
+                .email(jefe.getEmail())
+                .rol(jefe.getRol())
+                .programa(jefe.getPrograma())
+                .build();
+    }
+
+    @Override
+    public Optional<String> getEmailByRole(Rol rol) {
+        return userRepository.findFirstByRol(rol)
+                .map(User::getEmail);
     }
 }

@@ -41,6 +41,10 @@ identity:
   base-url: ${IDENTITY_SERVICE_URL:http://identity:8081}
   timeout-ms: 3000
 
+service:
+  internal:
+    token: ${SERVICE_INTERNAL_TOKEN:default-token-only-for-dev}
+
 # Configuración de notificaciones
 notification:
   # Emails por defecto (TEMPORAL - deberían obtenerse del identity-service)
