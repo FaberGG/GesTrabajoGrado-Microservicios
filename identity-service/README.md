@@ -11,6 +11,30 @@ El Microservicio de Identidad es responsable de:
 - Validación de tokens JWT
 - Proporcionar información sobre roles y programas disponibles
 
+## 🏗️ Arquitectura y Patrones de Diseño
+
+### Patrón Facade
+
+El microservicio implementa el **patrón Facade** para simplificar y centralizar las operaciones de identidad y autenticación.
+
+**Ubicación**: `com.unicauca.identity.facade.IdentityFacade`
+
+**Propósito**: El Facade proporciona una interfaz unificada y simplificada que encapsula la complejidad de las interacciones entre servicios y repositorios. Esto permite que los controladores tengan una API más limpia y desacoplada de la lógica de negocio interna.
+
+**Beneficios**:
+- **Simplificación**: Los controladores interactúan con una única clase (IdentityFacade) en lugar de múltiples servicios
+- **Desacoplamiento**: Cambios internos en servicios o repositorios no afectan a los controladores
+- **Mantenibilidad**: Lógica centralizada facilita el mantenimiento y testing
+- **Cohesión**: Agrupa operaciones relacionadas de identidad en un solo punto de acceso
+
+**Métodos principales**:
+- `registerUser()`: Registro de nuevos usuarios
+- `authenticateUser()`: Autenticación y generación de tokens
+- `getUserProfile()`: Obtención de perfiles de usuario
+- `verifyToken()`: Verificación de tokens JWT
+- `searchUsers()`: Búsqueda paginada de usuarios
+- `getEmailByRole()`: Consulta de emails por rol
+
 ## 🛠️ Tecnologías Utilizadas
 
 - **Runtime**: Java 21 LTS

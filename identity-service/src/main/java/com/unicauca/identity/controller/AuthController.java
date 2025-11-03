@@ -6,10 +6,8 @@ import com.unicauca.identity.dto.request.VerifyTokenRequest;
 import com.unicauca.identity.dto.response.*;
 import com.unicauca.identity.enums.Programa;
 import com.unicauca.identity.enums.Rol;
-import com.unicauca.identity.service.AuthService;
+import com.unicauca.identity.facade.IdentityFacade;
 import com.unicauca.identity.util.PaginationUtil;
-import com.unicauca.identity.entity.User;
-import com.unicauca.identity.repository.UserRepository;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,19 +31,17 @@ import java.util.*;
 @Slf4j
 public class AuthController {
 
-    private final AuthService authService;
-    private final UserRepository userRepository;
+    private final IdentityFacade identityFacade;
 
-    public AuthController(AuthService authService, UserRepository userRepository) {
-        this.authService = authService;
-        this.userRepository = userRepository;
+    public AuthController(IdentityFacade identityFacade) {
+        this.identityFacade = identityFacade;
     }
 
     @PostMapping("/register")
     @Operation(summary = "Registrar nuevo usuario",
             description = "Registra un nuevo usuario en el sistema con sus datos personales")
     public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        UserResponse registeredUser = authService.register(request);
+        UserResponse registeredUser = identityFacade.registerUser(request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(registeredUser, "Usuario registrado exitosamente"));
@@ -55,7 +51,7 @@ public class AuthController {
     @Operation(summary = "Iniciar sesión",
             description = "Autentica al usuario y devuelve un token JWT para acceder a recursos protegidos")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse loginResponse = authService.login(request);
+        LoginResponse loginResponse = identityFacade.authenticateUser(request);
         return ResponseEntity.ok(ApiResponse.success(loginResponse, "Login exitoso"));
     }
 
@@ -64,8 +60,8 @@ public class AuthController {
             description = "Obtiene el perfil del usuario autenticado (requiere token JWT)")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(@AuthenticationPrincipal UserDetails userDetails) {
         String userEmail = userDetails.getUsername();
-        Long userId = authService.getUserIdByEmail(userEmail);
-        UserResponse userProfile = authService.getProfile(userId);
+        Long userId = identityFacade.getUserIdByEmail(userEmail);
+        UserResponse userProfile = identityFacade.getUserProfile(userId);
         return ResponseEntity.ok(ApiResponse.success(userProfile));
     }
 
@@ -73,7 +69,7 @@ public class AuthController {
     @Operation(summary = "Obtener roles y programas disponibles",
             description = "Obtiene la lista de roles y programas académicos disponibles (requiere token JWT)")
     public ResponseEntity<ApiResponse<RolesResponse>> getRoles() {
-        RolesResponse rolesAndPrograms = authService.getRolesAndPrograms();
+        RolesResponse rolesAndPrograms = identityFacade.getRolesAndPrograms();
         return ResponseEntity.ok(ApiResponse.success(rolesAndPrograms));
     }
 
@@ -81,7 +77,7 @@ public class AuthController {
     @Operation(summary = "Verificar token JWT",
             description = "Verifica si un token JWT es válido y devuelve los datos asociados")
     public ResponseEntity<TokenVerificationResponse> verifyToken(@Valid @RequestBody VerifyTokenRequest request) {
-        TokenVerificationResponse response = authService.verifyToken(request);
+        TokenVerificationResponse response = identityFacade.verifyToken(request);
         return ResponseEntity.ok(response);
     }
 
@@ -95,28 +91,22 @@ public class AuthController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Page<UserResponse> userPage = authService.searchUsers(query, rol, programa, page, size);
+        Page<UserResponse> userPage = identityFacade.searchUsers(query, rol, programa, page, size);
         return PaginationUtil.createPaginatedResponse(userPage);
     }
-
-    // --------------------------------------------------------------
-    // NUEVOS ENDPOINTS: Correos del Coordinador y Jefe de Departamento
-    // --------------------------------------------------------------
-
 
     @GetMapping("/users/role/{role}/email")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getEmailByRole(@PathVariable("role") String role) {
         try {
             log.info("Buscando usuario con rol: {}", role);
 
-            // Convierte el String a enum
             Rol rolEnum = Rol.valueOf(role.toUpperCase());
 
-            Optional<User> userOpt = userRepository.findFirstByRol(rolEnum);
+            Optional<String> emailOpt = identityFacade.getEmailByRole(rolEnum);
 
-            if (userOpt.isPresent()) {
+            if (emailOpt.isPresent()) {
                 Map<String, Object> data = new HashMap<>();
-                data.put("email", userOpt.get().getEmail());
+                data.put("email", emailOpt.get());
                 return ResponseEntity.ok(ApiResponse.success(data, "Email obtenido correctamente"));
             } else {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
