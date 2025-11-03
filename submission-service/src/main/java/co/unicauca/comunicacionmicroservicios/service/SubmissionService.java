@@ -1,15 +1,15 @@
 package co.unicauca.comunicacionmicroservicios.service;
 
 import co.unicauca.comunicacionmicroservicios.domain.model.ProyectoSubmission;
-import co.unicauca.comunicacionmicroservicios.dto.CreateSubmissionDTO;
-import co.unicauca.comunicacionmicroservicios.dto.EvaluacionDTO;
-import co.unicauca.comunicacionmicroservicios.dto.SubmissionResponseDTO;
+import co.unicauca.comunicacionmicroservicios.dto.*;
 import co.unicauca.comunicacionmicroservicios.infrastructure.persistence.SubmissionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @Transactional
-public class SubmissionService {
+public class SubmissionService implements ISubmissionService {
 
     @Autowired
     private SubmissionRepository submissionRepository;
@@ -208,6 +208,56 @@ public class SubmissionService {
         dto.setRutaCarta(proyecto.getRutaCarta());
 
         return dto;
+    }
+
+    // Implementación de métodos de ISubmissionService
+
+    @Override
+    public IdResponse crearFormatoA(String userId, FormatoAData data, MultipartFile pdf, MultipartFile carta) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método crearFormatoA aún no implementado");
+    }
+
+    @Override
+    public FormatoAView obtenerFormatoA(Long id) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método obtenerFormatoA aún no implementado");
+    }
+
+    @Override
+    public FormatoAPage listarFormatoA(Optional<String> docenteId, int page, int size) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método listarFormatoA aún no implementado");
+    }
+
+    @Override
+    public IdResponse reenviarFormatoA(String userId, Long proyectoId, MultipartFile pdf, MultipartFile carta) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método reenviarFormatoA aún no implementado");
+    }
+
+    @Override
+    public void cambiarEstadoFormatoA(Long versionId, EvaluacionRequest req) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método cambiarEstadoFormatoA aún no implementado");
+    }
+
+    @Override
+    public IdResponse subirAnteproyecto(String userId, AnteproyectoData data, MultipartFile pdf) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método subirAnteproyecto aún no implementado");
+    }
+
+    @Override
+    public AnteproyectoPage listarAnteproyectos(int page, int size) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método listarAnteproyectos aún no implementado");
+    }
+
+    @Override
+    public void cambiarEstadoAnteproyecto(Long id, CambioEstadoAnteproyectoRequest req) {
+        // TODO: Implementar lógica completa
+        throw new UnsupportedOperationException("Método cambiarEstadoAnteproyecto aún no implementado");
     }
 }
 
