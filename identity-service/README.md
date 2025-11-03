@@ -10,8 +10,10 @@ El Microservicio de Identidad es responsable de:
 - Gestión de perfiles de usuario
 - Validación de tokens JWT
 - Proporcionar información sobre roles y programas disponibles
+- Búsqueda y consulta de usuarios
+- Comunicación interna entre microservicios (service-to-service)
 
-## 🏗️ Arquitectura y Patrones de Diseño
+## 🗝️ Arquitectura y Patrones de Diseño
 
 ### Patrón Facade
 
@@ -34,6 +36,9 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
 - `verifyToken()`: Verificación de tokens JWT
 - `searchUsers()`: Búsqueda paginada de usuarios
 - `getEmailByRole()`: Consulta de emails por rol
+- `getUserBasicInfo()`: Información básica para comunicación entre servicios
+- `getCoordinador()`: Obtención del coordinador del sistema
+- `getJefeDepartamento()`: Obtención del jefe de departamento
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -93,6 +98,7 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
    set DB_USER=identity_user
    set DB_PASSWORD=identity_pass
    set JWT_SECRET=your-super-secure-jwt-secret-key-minimum-32-characters
+   set SERVICE_INTERNAL_TOKEN=your-secure-service-token
 
    # Linux/Mac
    export SPRING_PROFILES_ACTIVE=dev
@@ -100,6 +106,7 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
    export DB_USER=identity_user
    export DB_PASSWORD=identity_pass
    export JWT_SECRET=your-super-secure-jwt-secret-key-minimum-32-characters
+   export SERVICE_INTERNAL_TOKEN=your-secure-service-token
    ```
 
 3. **Compilar y ejecutar la aplicación**
@@ -109,12 +116,12 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
    ```
 
 4. **Acceder a la aplicación**
-   - API: http://localhost:8080/api/auth
-   - Documentación Swagger: http://localhost:8080/swagger-ui.html
+    - API: http://localhost:8080/api/auth
+    - Documentación Swagger: http://localhost:8080/swagger-ui.html
 
 ## 📡 Endpoints API
 
-### Registro de Usuario
+### 1. Registro de Usuario
 - **URL**: `/api/auth/register`
 - **Método**: `POST`
 - **Autenticación**: No requerida
@@ -150,7 +157,7 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
   }
   ```
 
-### Login
+### 2. Login
 - **URL**: `/api/auth/login`
 - **Método**: `POST`
 - **Autenticación**: No requerida
@@ -184,7 +191,7 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
   }
   ```
 
-### Perfil de Usuario
+### 3. Perfil de Usuario
 - **URL**: `/api/auth/profile`
 - **Método**: `GET`
 - **Autenticación**: Requerida (Bearer Token)
@@ -212,7 +219,7 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
   }
   ```
 
-### Roles y Programas Disponibles
+### 4. Roles y Programas Disponibles
 - **URL**: `/api/auth/roles`
 - **Método**: `GET`
 - **Autenticación**: No requerida
@@ -234,7 +241,7 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
   }
   ```
 
-### Verificar Token
+### 5. Verificar Token
 - **URL**: `/api/auth/verify-token`
 - **Método**: `POST`
 - **Autenticación**: No requerida
@@ -266,6 +273,137 @@ El microservicio implementa el **patrón Facade** para simplificar y centralizar
     "message": "Token inválido o expirado",
     "data": null,
     "errors": null
+  }
+  ```
+
+### 6. Buscar Usuarios
+- **URL**: `/api/auth/users/search`
+- **Método**: `GET`
+- **Autenticación**: Requerida (Bearer Token)
+- **Query Parameters**:
+    - `query` (opcional): Texto para buscar en nombres, apellidos o email
+    - `rol` (opcional): Filtrar por rol específico
+    - `programa` (opcional): Filtrar por programa académico
+    - `page` (opcional, default: 0): Número de página
+    - `size` (opcional, default: 10): Tamaño de página
+- **Ejemplo**: `/api/auth/users/search?query=juan&rol=ESTUDIANTE&page=0&size=10`
+- **Respuesta (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": null,
+    "data": {
+      "content": [
+        {
+          "id": 1,
+          "nombres": "Juan Carlos",
+          "apellidos": "Pérez García",
+          "celular": "3201234567",
+          "programa": "INGENIERIA_DE_SISTEMAS",
+          "rol": "ESTUDIANTE",
+          "email": "juan.perez@unicauca.edu.co",
+          "createdAt": "2025-10-16T11:27:56.972816",
+          "updatedAt": "2025-10-16T11:27:56.972816"
+        }
+      ],
+      "page": {
+        "size": 10,
+        "number": 0,
+        "totalElements": 1,
+        "totalPages": 1
+      }
+    }
+  }
+  ```
+
+### 7. Obtener Email por Rol
+- **URL**: `/api/auth/users/role/{role}/email`
+- **Método**: `GET`
+- **Autenticación**: No requerida
+- **Path Parameter**:
+    - `role`: Rol del usuario (ESTUDIANTE, DOCENTE, COORDINADOR, JEFE_DEPARTAMENTO, ADMIN)
+- **Ejemplo**: `/api/auth/users/role/COORDINADOR/email`
+- **Respuesta (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Email obtenido correctamente",
+    "data": {
+      "email": "coordinador@unicauca.edu.co"
+    },
+    "errors": null
+  }
+  ```
+
+### 8. Obtener Información Básica de Usuario (Service-to-Service)
+- **URL**: `/api/auth/users/{userId}/basic`
+- **Método**: `GET`
+- **Autenticación**: Token de servicio interno
+- **Headers**:
+  ```
+  X-Service-Token: your-secure-service-token
+  ```
+- **Respuesta (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Usuario encontrado",
+    "data": {
+      "id": 1,
+      "nombres": "Juan Carlos",
+      "apellidos": "Pérez García",
+      "email": "juan.perez@unicauca.edu.co",
+      "rol": "ESTUDIANTE",
+      "programa": "INGENIERIA_DE_SISTEMAS"
+    }
+  }
+  ```
+
+### 9. Obtener Coordinador (Service-to-Service)
+- **URL**: `/api/auth/users/coordinador`
+- **Método**: `GET`
+- **Autenticación**: Token de servicio interno
+- **Headers**:
+  ```
+  X-Service-Token: your-secure-service-token
+  ```
+- **Respuesta (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Coordinador encontrado",
+    "data": {
+      "id": 2,
+      "nombres": "María",
+      "apellidos": "González",
+      "email": "coordinador@unicauca.edu.co",
+      "rol": "COORDINADOR",
+      "programa": "INGENIERIA_DE_SISTEMAS"
+    }
+  }
+  ```
+
+### 10. Obtener Jefe de Departamento (Service-to-Service)
+- **URL**: `/api/auth/users/jefe-departamento`
+- **Método**: `GET`
+- **Autenticación**: Token de servicio interno
+- **Headers**:
+  ```
+  X-Service-Token: your-secure-service-token
+  ```
+- **Respuesta (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "message": "Jefe de departamento encontrado",
+    "data": {
+      "id": 3,
+      "nombres": "Carlos",
+      "apellidos": "Ramírez",
+      "email": "jefe.departamento@unicauca.edu.co",
+      "rol": "JEFE_DEPARTAMENTO",
+      "programa": "INGENIERIA_DE_SISTEMAS"
+    }
   }
   ```
 
@@ -321,17 +459,31 @@ Content-Type: application/json
 GET http://localhost:8080/api/auth/roles
 ```
 
-### 6. Actualizar Perfil
+### 6. Buscar Usuarios
 ```http
-PUT http://localhost:8080/api/auth/profile
+GET http://localhost:8080/api/auth/users/search?query=juan&page=0&size=10
 Authorization: Bearer {token-obtenido-del-login}
-Content-Type: application/json
+```
 
-{
-  "nombres": "Juan Carlos",
-  "apellidos": "Pérez García",
-  "celular": "3209876543"
-}
+### 7. Obtener Email por Rol
+```http
+GET http://localhost:8080/api/auth/users/role/COORDINADOR/email
+```
+
+### 8. Endpoints Internos (Service-to-Service)
+```http
+GET http://localhost:8080/api/auth/users/1/basic
+X-Service-Token: your-secure-service-token
+```
+
+```http
+GET http://localhost:8080/api/auth/users/coordinador
+X-Service-Token: your-secure-service-token
+```
+
+```http
+GET http://localhost:8080/api/auth/users/jefe-departamento
+X-Service-Token: your-secure-service-token
 ```
 
 ## 📊 Valores Válidos para Enums
@@ -343,11 +495,11 @@ Content-Type: application/json
 - `TECNOLOGIA_EN_TELEMATICA`
 
 ### Roles
-- `ESTUDIANTE`
-- `DOCENTE`
-- `COORDINADOR`
-- `JEFE_DEPARTAMENTO`
-- `ADMIN`
+- `ESTUDIANTE` - Estudiante que realiza proyecto de grado
+- `DOCENTE` - Director o codirector de proyecto de grado
+- `COORDINADOR` - Coordinador de programa que evalúa Formato A
+- `JEFE_DEPARTAMENTO` - Jefe de departamento que recibe anteproyectos
+- `ADMIN` - Administrador del sistema
 
 **Importante**: Los valores deben escribirse exactamente como se muestran (en mayúsculas y con guiones bajos).
 
@@ -363,16 +515,25 @@ mvn test
 mvn test jacoco:report
 ```
 
-## 🔐 Variables de Entorno
+## 🔐 Seguridad y Comunicación Entre Servicios
+
+### Autenticación de Usuarios
+Los endpoints públicos (`/register`, `/login`) no requieren autenticación. Los endpoints protegidos requieren un token JWT válido en el header `Authorization: Bearer {token}`.
+
+### Comunicación Service-to-Service
+Los endpoints internos (`/users/{userId}/basic`, `/users/coordinador`, `/users/jefe-departamento`) requieren un token de servicio interno en el header `X-Service-Token`. Este token debe configurarse mediante la variable de entorno `SERVICE_INTERNAL_TOKEN` y debe ser compartido solo entre microservicios confiables.
+
+## 📝 Variables de Entorno
 
 | Variable | Descripción | Valor por defecto |
 |----------|-------------|------------------|
 | `SPRING_PROFILES_ACTIVE` | Perfil activo (dev/prod/test) | `dev` |
-| `DATABASE_URL` | URL de conexión a la base de datos | `jdbc:postgresql://localhost:5432/identity_db` |
-| `DB_USER` | Usuario de la base de datos | `identity_user` |
-| `DB_PASSWORD` | Contraseña de la base de datos | `identity_pass` |
+| `SPRING_DATASOURCE_URL` | URL de conexión a la base de datos | `jdbc:postgresql://localhost:5432/identity_db` |
+| `SPRING_DATASOURCE_USERNAME` | Usuario de la base de datos | `identity_user` |
+| `SPRING_DATASOURCE_PASSWORD` | Contraseña de la base de datos | `identity_pass` |
 | `JWT_SECRET` | Clave secreta para firmar tokens JWT | `your-super-secret-jwt-key...` |
 | `JWT_EXPIRATION` | Tiempo de expiración del token en ms | `3600000` (1 hora) |
+| `SERVICE_INTERNAL_TOKEN` | Token para comunicación entre servicios | `default-token-only-for-dev` |
 
 ## 📊 Monitoreo y Health Check
 
@@ -380,26 +541,31 @@ mvn test jacoco:report
 - Métricas: `http://localhost:8080/actuator/metrics`
 - Info: `http://localhost:8080/actuator/info`
 
-## 🔍 Solución de Problemas
+## 🔧 Solución de Problemas
 
 ### Problemas comunes
 
 1. **Error de conexión a la base de datos**
-   - Verificar que PostgreSQL esté en ejecución
-   - Comprobar las credenciales de acceso
-   - Revisar logs en `logs/identity-service.log`
+    - Verificar que PostgreSQL esté en ejecución
+    - Comprobar las credenciales de acceso
+    - Revisar logs en `logs/identity-service.log`
 
-2. **Error de deserialización de enum** (ej: `INGENIERIA_ELECTRONICA` no válido)
-   - Usar valores exactos: `INGENIERIA_ELECTRONICA_Y_TELECOMUNICACIONES`
-   - Verificar que todos los valores estén en mayúsculas con guiones bajos
+2. **Error de deserialización de enum**
+    - Usar valores exactos: `INGENIERIA_ELECTRONICA_Y_TELECOMUNICACIONES`
+    - Verificar que todos los valores estén en mayúsculas con guiones bajos
+    - Roles válidos: `ESTUDIANTE`, `DOCENTE`, `COORDINADOR`, `JEFE_DEPARTAMENTO`, `ADMIN`
 
 3. **Token JWT inválido**
-   - Verificar que el token no haya expirado (1 hora de validez)
-   - Comprobar formato correcto: `Bearer <token>`
+    - Verificar que el token no haya expirado (1 hora de validez)
+    - Comprobar formato correcto: `Bearer <token>`
 
 4. **Fallos en la validación**
-   - Los emails deben ser institucionales (@unicauca.edu.co)
-   - Las contraseñas deben cumplir requisitos: mínimo 8 caracteres, mayúscula, número y carácter especial
+    - Los emails deben ser institucionales (@unicauca.edu.co)
+    - Las contraseñas deben cumplir requisitos: mínimo 8 caracteres, mayúscula, número y carácter especial
+
+5. **Acceso denegado a endpoints internos**
+    - Verificar que el header `X-Service-Token` esté presente
+    - Comprobar que el token coincida con `SERVICE_INTERNAL_TOKEN`
 
 ## 📄 Licencia
 
