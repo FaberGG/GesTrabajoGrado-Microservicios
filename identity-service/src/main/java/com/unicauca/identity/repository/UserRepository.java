@@ -1,9 +1,10 @@
 package com.unicauca.identity.repository;
-
+import com.unicauca.identity.enums.Rol;
 import com.unicauca.identity.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
+import com.unicauca.identity.enums.Rol;
 
 import java.util.Optional;
 
@@ -14,7 +15,7 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
     /**
-     * Busca un usuario por su dirección de email
+     * Busca un usuario por su dirección de email.
      *
      * @param email Email del usuario
      * @return Usuario encontrado (Optional)
@@ -22,10 +23,13 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     Optional<User> findByEmail(String email);
 
     /**
-     * Verifica si existe un usuario con el email proporcionado
+     * Verifica si existe un usuario con el email proporcionado.
      *
      * @param email Email a verificar
      * @return true si existe un usuario con ese email
      */
     boolean existsByEmail(String email);
+
+    Optional<User> findFirstByRol(Rol rol);
+
 }

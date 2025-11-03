@@ -3,19 +3,18 @@ package com.unicauca.identity.controller;
 import com.unicauca.identity.dto.request.LoginRequest;
 import com.unicauca.identity.dto.request.RegisterRequest;
 import com.unicauca.identity.dto.request.VerifyTokenRequest;
-import com.unicauca.identity.dto.response.ApiResponse;
-import com.unicauca.identity.dto.response.LoginResponse;
-import com.unicauca.identity.dto.response.RolesResponse;
-import com.unicauca.identity.dto.response.TokenVerificationResponse;
-import com.unicauca.identity.dto.response.UserResponse;
+import com.unicauca.identity.dto.response.*;
 import com.unicauca.identity.enums.Programa;
 import com.unicauca.identity.enums.Rol;
 import com.unicauca.identity.service.AuthService;
 import com.unicauca.identity.util.PaginationUtil;
+import com.unicauca.identity.entity.User;
+import com.unicauca.identity.repository.UserRepository;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,24 +22,28 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.*;
+
 /**
- * Controlador REST para operaciones de autenticación
+ * Controlador REST para operaciones de autenticación y gestión de identidad
  */
 @RestController
 @RequestMapping("/api/auth")
 @Tag(name = "Autenticación", description = "Operaciones de autenticación y gestión de identidad")
+@Slf4j
 public class AuthController {
 
     private final AuthService authService;
+    private final UserRepository userRepository;
 
-    // Constructor explícito para la inyección de dependencias
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, UserRepository userRepository) {
         this.authService = authService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/register")
     @Operation(summary = "Registrar nuevo usuario",
-               description = "Registra un nuevo usuario en el sistema con sus datos personales")
+            description = "Registra un nuevo usuario en el sistema con sus datos personales")
     public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
         UserResponse registeredUser = authService.register(request);
         return ResponseEntity
@@ -50,7 +53,7 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(summary = "Iniciar sesión",
-               description = "Autentica al usuario y devuelve un token JWT para acceder a recursos protegidos")
+            description = "Autentica al usuario y devuelve un token JWT para acceder a recursos protegidos")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse loginResponse = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success(loginResponse, "Login exitoso"));
@@ -58,23 +61,17 @@ public class AuthController {
 
     @GetMapping("/profile")
     @Operation(summary = "Obtener perfil de usuario",
-               description = "Obtiene el perfil del usuario autenticado (requiere token JWT)")
+            description = "Obtiene el perfil del usuario autenticado (requiere token JWT)")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(@AuthenticationPrincipal UserDetails userDetails) {
-        // Obtener el email del usuario autenticado
         String userEmail = userDetails.getUsername();
-
-        // Buscar el usuario por email para obtener su ID
         Long userId = authService.getUserIdByEmail(userEmail);
-
-        // Obtener el perfil completo
         UserResponse userProfile = authService.getProfile(userId);
-
         return ResponseEntity.ok(ApiResponse.success(userProfile));
     }
 
     @GetMapping("/roles")
     @Operation(summary = "Obtener roles y programas disponibles",
-               description = "Obtiene la lista de roles y programas académicos disponibles (requiere token JWT)")
+            description = "Obtiene la lista de roles y programas académicos disponibles (requiere token JWT)")
     public ResponseEntity<ApiResponse<RolesResponse>> getRoles() {
         RolesResponse rolesAndPrograms = authService.getRolesAndPrograms();
         return ResponseEntity.ok(ApiResponse.success(rolesAndPrograms));
@@ -82,7 +79,7 @@ public class AuthController {
 
     @PostMapping("/verify-token")
     @Operation(summary = "Verificar token JWT",
-               description = "Verifica si un token JWT es válido y devuelve los datos asociados")
+            description = "Verifica si un token JWT es válido y devuelve los datos asociados")
     public ResponseEntity<TokenVerificationResponse> verifyToken(@Valid @RequestBody VerifyTokenRequest request) {
         TokenVerificationResponse response = authService.verifyToken(request);
         return ResponseEntity.ok(response);
@@ -90,7 +87,7 @@ public class AuthController {
 
     @GetMapping("/users/search")
     @Operation(summary = "Buscar usuarios",
-               description = "Busca usuarios según criterios y devuelve resultados paginados (requiere token JWT)")
+            description = "Busca usuarios según criterios y devuelve resultados paginados (requiere token JWT)")
     public ResponseEntity<?> searchUsers(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Rol rol,
@@ -100,5 +97,39 @@ public class AuthController {
 
         Page<UserResponse> userPage = authService.searchUsers(query, rol, programa, page, size);
         return PaginationUtil.createPaginatedResponse(userPage);
+    }
+
+    // --------------------------------------------------------------
+    // NUEVOS ENDPOINTS: Correos del Coordinador y Jefe de Departamento
+    // --------------------------------------------------------------
+
+
+    @GetMapping("/users/role/{role}/email")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEmailByRole(@PathVariable("role") String role) {
+        try {
+            log.info("Buscando usuario con rol: {}", role);
+
+            // Convierte el String a enum
+            Rol rolEnum = Rol.valueOf(role.toUpperCase());
+
+            Optional<User> userOpt = userRepository.findFirstByRol(rolEnum);
+
+            if (userOpt.isPresent()) {
+                Map<String, Object> data = new HashMap<>();
+                data.put("email", userOpt.get().getEmail());
+                return ResponseEntity.ok(ApiResponse.success(data, "Email obtenido correctamente"));
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("No se encontró usuario con rol " + role));
+            }
+        } catch (IllegalArgumentException e) {
+            log.error("Rol inválido: {}", role);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Rol inválido: " + role));
+        } catch (Exception e) {
+            log.error("Error obteniendo email por rol: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Error interno al buscar el email"));
+        }
     }
 }

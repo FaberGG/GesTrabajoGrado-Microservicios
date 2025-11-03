@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -12,37 +11,45 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - identity-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U identity_user"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h 127.0.0.1"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks: [ microservices-network ]
 
   identity-service:
     build: .
     container_name: identity-service
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DATABASE_URL: jdbc:postgresql://postgres:5432/identity_db
-      DB_USER: identity_user
-      DB_PASSWORD: identity_pass
       JWT_SECRET: your-super-secret-jwt-key-change-in-production-MINIMUM-32-CHARACTERS
-      JWT_EXPIRATION: 3600000
-    ports:
-      - "8080:8080"
+      JWT_EXPIRATION: "3600000"
+
+      # Datasource para no tocar YAML:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/identity_db
+      SPRING_DATASOURCE_USERNAME: identity_user
+      SPRING_DATASOURCE_PASSWORD: identity_pass
+
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - identity-network
+    ports:
+      - "8080:8080"
     volumes:
       - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    restart: unless-stopped
+    networks: [ microservices-network ]
 
 volumes:
   postgres_data:
 
 networks:
-  identity-network:
-    driver: bridge
+  microservices-network:
+    external: true
