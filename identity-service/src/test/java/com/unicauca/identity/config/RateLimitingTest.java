@@ -15,8 +15,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
@@ -67,22 +65,16 @@ class RateLimitingTest {
         // Given - Una solicitud HTTP para /api/auth/login
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
         request.setRemoteAddr("192.168.1.2");
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        // Preparar la respuesta para capturar la salida
-        StringWriter stringWriter = new StringWriter();
-        PrintWriter writer = new PrintWriter(stringWriter);
-        when(response.getWriter()).thenReturn(writer);
 
         // When - Excedemos la capacidad permitida (2+1 solicitudes)
-        rateLimitFilter.doFilter(request, response, filterChain);
-        rateLimitFilter.doFilter(request, response, filterChain);
+        MockHttpServletResponse response1 = new MockHttpServletResponse();
+        rateLimitFilter.doFilter(request, response1, filterChain);
+
+        MockHttpServletResponse response2 = new MockHttpServletResponse();
+        rateLimitFilter.doFilter(request, response2, filterChain);
 
         // Crear nueva respuesta para la tercera solicitud que debería ser bloqueada
         MockHttpServletResponse blockedResponse = new MockHttpServletResponse();
-        StringWriter blockedWriter = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(blockedWriter);
-        when(blockedResponse.getWriter()).thenReturn(printWriter);
 
         rateLimitFilter.doFilter(request, blockedResponse, filterChain);
 
