@@ -26,6 +26,7 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       JWT_SECRET: your-super-secret-jwt-key-change-in-production-MINIMUM-32-CHARACTERS
       JWT_EXPIRATION: "3600000"
+      SERVICE_INTERNAL_TOKEN: default-token-only-for-dev
 
       # Datasource para no tocar YAML:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/identity_db

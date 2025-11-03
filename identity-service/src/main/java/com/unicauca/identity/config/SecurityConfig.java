@@ -12,7 +12,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
@@ -39,6 +38,9 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/verify-token",
                                 "/api/auth/users/role/*/email",   // público para integración
+                                "/api/auth/users/*/basic",         // endpoints internos con X-Service-Token
+                                "/api/auth/users/coordinador",     // endpoints internos con X-Service-Token
+                                "/api/auth/users/jefe-departamento", // endpoints internos con X-Service-Token
                                 "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/actuator/health", "/actuator/info"
                         ).permitAll()

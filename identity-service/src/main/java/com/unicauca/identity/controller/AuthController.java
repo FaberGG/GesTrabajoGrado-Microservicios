@@ -8,7 +8,6 @@ import com.unicauca.identity.enums.Programa;
 import com.unicauca.identity.enums.Rol;
 import com.unicauca.identity.facade.IdentityFacade;
 import com.unicauca.identity.util.PaginationUtil;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,7 +19,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Controlador REST para operaciones de autenticación y gestión de identidad
@@ -121,5 +122,93 @@ public class AuthController {
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Error interno al buscar el email"));
         }
+    }
+
+
+    /**
+     * Obtiene información básica de un usuario por ID
+     * Endpoint interno para otros microservicios
+     */
+    @GetMapping("/users/{userId}/basic")
+    @Operation(summary = "Obtener información básica de usuario por ID",
+            description = "Endpoint interno para comunicación entre microservicios")
+    public ResponseEntity<ApiResponse<UserBasicInfoDTO>> getUserBasicInfo(
+            @PathVariable Long userId,
+            @RequestHeader(value = "X-Service-Token", required = false) String serviceToken) {
+
+        // Solo servicios internos pueden acceder
+        if (!isValidServiceToken(serviceToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Token de servicio inválido o ausente"));
+        }
+
+        UserBasicInfoDTO userInfo = identityFacade.getUserBasicInfo(userId);
+        return ResponseEntity.ok(ApiResponse.success(userInfo, "Usuario encontrado"));
+    }
+
+    /**
+     * Obtiene información del coordinador
+     */
+    @GetMapping("/users/coordinador")
+    @Operation(summary = "Obtener coordinador del sistema")
+    public ResponseEntity<ApiResponse<UserBasicInfoDTO>> getCoordinador(
+            @RequestHeader(value = "X-Service-Token", required = false) String serviceToken) {
+
+        if (!isValidServiceToken(serviceToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Token de servicio inválido o ausente"));
+        }
+
+        UserBasicInfoDTO coordinador = identityFacade.getCoordinador();
+        return ResponseEntity.ok(ApiResponse.success(coordinador, "Coordinador encontrado"));
+    }
+
+    /**
+     * Obtiene información del jefe de departamento
+     */
+    @GetMapping("/users/jefe-departamento")
+    @Operation(summary = "Obtener jefe de departamento")
+    public ResponseEntity<ApiResponse<UserBasicInfoDTO>> getJefeDepartamento(
+            @RequestHeader(value = "X-Service-Token", required = false) String serviceToken) {
+
+        if (!isValidServiceToken(serviceToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Token de servicio inválido o ausente"));
+        }
+
+        UserBasicInfoDTO jefe = identityFacade.getJefeDepartamento();
+        return ResponseEntity.ok(ApiResponse.success(jefe, "Jefe de departamento encontrado"));
+    }
+
+    // =====================================================
+    // MÉTODO PRIVADO: Validación de Token de Servicio
+    // =====================================================
+
+    /**
+     * Valida que el token de servicio sea correcto
+     * (Solo para endpoints internos service-to-service)
+     */
+    private boolean isValidServiceToken(String receivedToken) {
+        if (receivedToken == null || receivedToken.isBlank()) {
+            log.warn("Intento de acceso a endpoint interno sin token de servicio");
+            return false;
+        }
+
+        // Obtener el token esperado desde variables de entorno
+        String expectedToken = System.getenv("SERVICE_INTERNAL_TOKEN");
+
+        // Si no está configurado, usar valor por defecto solo en desarrollo
+        if (expectedToken == null || expectedToken.isBlank()) {
+            log.warn("SERVICE_INTERNAL_TOKEN no configurado, usando valor por defecto (SOLO DESARROLLO)");
+            expectedToken = "default-token-only-for-dev";
+        }
+
+        boolean isValid = receivedToken.equals(expectedToken);
+
+        if (!isValid) {
+            log.warn("Token de servicio inválido recibido");
+        }
+
+        return isValid;
     }
 }

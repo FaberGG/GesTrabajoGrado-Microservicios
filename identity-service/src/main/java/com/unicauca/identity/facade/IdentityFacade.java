@@ -3,10 +3,7 @@ package com.unicauca.identity.facade;
 import com.unicauca.identity.dto.request.LoginRequest;
 import com.unicauca.identity.dto.request.RegisterRequest;
 import com.unicauca.identity.dto.request.VerifyTokenRequest;
-import com.unicauca.identity.dto.response.LoginResponse;
-import com.unicauca.identity.dto.response.RolesResponse;
-import com.unicauca.identity.dto.response.TokenVerificationResponse;
-import com.unicauca.identity.dto.response.UserResponse;
+import com.unicauca.identity.dto.response.*;
 import com.unicauca.identity.entity.User;
 import com.unicauca.identity.enums.Programa;
 import com.unicauca.identity.enums.Rol;
@@ -98,6 +95,19 @@ public class IdentityFacade {
         log.debug("Facade: Buscando email de usuario con rol: {}", rol);
         Optional<User> userOpt = userRepository.findFirstByRol(rol);
         return userOpt.map(User::getEmail);
+    }
+
+
+    public UserBasicInfoDTO getUserBasicInfo(Long userId) {
+        return authService.getUserBasicInfo(userId);
+    }
+
+    public UserBasicInfoDTO getCoordinador() {
+        return authService.getCoordinador();
+    }
+
+    public UserBasicInfoDTO getJefeDepartamento() {
+        return authService.getJefeDepartamento();
     }
 }
 

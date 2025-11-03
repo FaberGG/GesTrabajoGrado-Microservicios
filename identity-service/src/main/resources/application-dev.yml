@@ -22,7 +22,10 @@ spring:
 jwt:
   secret: ${JWT_SECRET:dev-secret-key-minimum-32-characters-long}
   expiration: ${JWT_EXPIRATION:3600000}
-
+# Cominicacion entre microservicios
+service:
+  internal:
+    token: ${SERVICE_INTERNAL_TOKEN:default-token-only-for-dev}
 server:
   port: 8080
 
