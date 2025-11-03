@@ -16,7 +16,7 @@ public class ValidationUtil {
     private static final String EMAIL_REGEX = "^[^\\s@]+@unicauca\\.edu\\.co$";
     private static final Pattern EMAIL_PATTERN = Pattern.compile(EMAIL_REGEX);
 
-    private static final String PASSWORD_REGEX = "^(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{6,}$";
+    private static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{6,}$";
     private static final Pattern PASSWORD_PATTERN = Pattern.compile(PASSWORD_REGEX);
 
     private static final String NAME_REGEX = "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,}$";
