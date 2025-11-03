@@ -9,7 +9,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "co.unicauca.comunicacionmicroservicios",
         "com.unicauca.comunicacionmicroservicios"
 })
-@EnableJpaRepositories(basePackages = "co.unicauca.comunicacionmicroservicios.infraestructure.repository")
+@EnableJpaRepositories(basePackages = {
+        "co.unicauca.comunicacionmicroservicios.infraestructure.repository",
+        "co.unicauca.comunicacionmicroservicios.infrastructure.persistence"
+})
 @EntityScan(basePackages = "co.unicauca.comunicacionmicroservicios.domain.model")
 public class ComunicacionMicroservicios {
     public static void main(String[] args) {
