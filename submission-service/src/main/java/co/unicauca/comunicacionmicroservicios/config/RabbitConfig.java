@@ -2,6 +2,7 @@ package co.unicauca.comunicacionmicroservicios.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -14,6 +15,8 @@ import org.springframework.context.annotation.Configuration;
  * ARQUITECTURA:
  * - Submission Service publica mensajes NotificationRequest a la cola "notifications.q"
  * - Notification Service consume de esa cola y procesa las notificaciones
+ * - Submission Service también publica eventos de proyectos a "project.events.exchange"
+ * - Progress Tracking Service consume eventos de proyectos para actualizar estados
  * - Se usa una ÚNICA instancia de RabbitMQ compartida entre todos los microservicios
  *
  * REQUISITOS FUNCIONALES CUBIERTOS:
@@ -24,11 +27,28 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitConfig {
 
+    // ===== CONFIGURACIÓN EXISTENTE (NOTIFICACIONES) =====
+
     /**
      * Nombre de la cola compartida para todas las notificaciones.
      * Esta cola es consumida por el notification-service.
      */
     public static final String NOTIFICATIONS_QUEUE = "notifications.q";
+
+    // ===== NUEVA CONFIGURACIÓN PARA PROGRESS TRACKING =====
+
+    /**
+     * Exchange principal para eventos de proyectos
+     * Usado por Progress Tracking Service
+     */
+    public static final String PROJECT_EVENTS_EXCHANGE = "project.events.exchange";
+
+    /**
+     * Routing keys para los diferentes eventos
+     */
+    public static final String FORMATOA_SUBMITTED_ROUTING_KEY = "project.formatoa.submitted";
+    public static final String FORMATOA_RESUBMITTED_ROUTING_KEY = "project.formatoa.resubmitted";
+    public static final String ANTEPROYECTO_SUBMITTED_ROUTING_KEY = "project.anteproyecto.submitted";
 
     /**
      * Converter para serializar/deserializar mensajes como JSON.
@@ -57,5 +77,14 @@ public class RabbitConfig {
     @Bean
     public Queue notificationsQueue() {
         return new Queue(NOTIFICATIONS_QUEUE, true); // durable
+    }
+
+    /**
+     * Declara el Topic Exchange para eventos de proyectos
+     * Progress Tracking Service se bindea a este exchange
+     */
+    @Bean
+    public TopicExchange projectEventsExchange() {
+        return new TopicExchange(PROJECT_EVENTS_EXCHANGE, true, false);
     }
 }

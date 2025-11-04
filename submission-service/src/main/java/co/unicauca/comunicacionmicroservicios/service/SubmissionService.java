@@ -2,12 +2,18 @@ package co.unicauca.comunicacionmicroservicios.service;
 
 import co.unicauca.comunicacionmicroservicios.domain.model.ProyectoSubmission;
 import co.unicauca.comunicacionmicroservicios.dto.*;
+import co.unicauca.comunicacionmicroservicios.dto.events.AnteproyectoEnviadoEvent;
+import co.unicauca.comunicacionmicroservicios.dto.events.FormatoAEnviadoEvent;
+import co.unicauca.comunicacionmicroservicios.dto.events.FormatoAReenviadoEvent;
 import co.unicauca.comunicacionmicroservicios.infrastructure.persistence.SubmissionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -19,8 +25,16 @@ import java.util.stream.Collectors;
 @Transactional
 public class SubmissionService implements ISubmissionService {
 
+    private static final Logger log = LoggerFactory.getLogger(SubmissionService.class);
+
     @Autowired
     private SubmissionRepository submissionRepository;
+
+    @Autowired
+    private ProgressEventPublisher progressEventPublisher;
+
+    @Autowired
+    private IdentityClient identityClient;
 
     /**
      * Crear un nuevo proyecto submission (estado inicial: FORMATO_A_DILIGENCIADO)
@@ -214,8 +228,65 @@ public class SubmissionService implements ISubmissionService {
 
     @Override
     public IdResponse crearFormatoA(String userId, FormatoAData data, MultipartFile pdf, MultipartFile carta) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método crearFormatoA aún no implementado");
+        log.info("📝 Creando Formato A inicial - Usuario: {}, Título: {}", userId, data.getTitulo());
+
+        // 1. Validar archivos
+        if (pdf == null || pdf.isEmpty()) {
+            throw new IllegalArgumentException("El PDF del Formato A es obligatorio");
+        }
+
+        if (data.getModalidad() == co.unicauca.comunicacionmicroservicios.domain.model.enumModalidad.PRACTICA_PROFESIONAL) {
+            if (carta == null || carta.isEmpty()) {
+                throw new IllegalArgumentException("La carta es obligatoria para modalidad PRACTICA_PROFESIONAL");
+            }
+        }
+
+        // 2. Guardar archivos (TEMPORAL - delegar a FileStorageService si existe)
+        String rutaPdf = "/uploads/formatoA/" + pdf.getOriginalFilename();
+        String rutaCarta = carta != null ? "/uploads/cartas/" + carta.getOriginalFilename() : null;
+
+        // 3. Crear proyecto
+        ProyectoSubmission proyecto = new ProyectoSubmission();
+        proyecto.setTitulo(data.getTitulo());
+        proyecto.setModalidad(data.getModalidad());
+        proyecto.setObjetivoGeneral(data.getObjetivoGeneral());
+        proyecto.setObjetivosEspecificos(String.join("; ", data.getObjetivosEspecificos()));
+        proyecto.setDocenteDirectorId(Long.valueOf(data.getDirectorId()));
+        proyecto.setDocenteCodirectorId(data.getCodirectorId() != null ? Long.valueOf(data.getCodirectorId()) : null);
+        proyecto.setEstudianteId(Long.valueOf(data.getEstudiante1Id()));
+        proyecto.setRutaFormatoA(rutaPdf);
+        proyecto.setRutaCarta(rutaCarta);
+        proyecto.setNumeroIntentos(1); // Primera versión
+
+        // 4. Guardar en BD
+        ProyectoSubmission guardado = submissionRepository.save(proyecto);
+        log.info("✅ Proyecto creado con ID: {}", guardado.getId());
+
+        // 5. Obtener información del usuario responsable desde Identity Service
+        IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
+
+        // 6. Obtener programa del estudiante
+        IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(Long.valueOf(data.getEstudiante1Id()));
+        String programa = estudianteInfo.programa() != null ? estudianteInfo.programa() : "DESCONOCIDO";
+
+        // 7. Publicar evento a Progress Tracking (NUEVO)
+        FormatoAEnviadoEvent event = FormatoAEnviadoEvent.builder()
+                .proyectoId(guardado.getId())
+                .titulo(guardado.getTitulo())
+                .modalidad(guardado.getModalidad().name())
+                .programa(programa)
+                .version(1)
+                .descripcion("Primera versión del Formato A")
+                .timestamp(LocalDateTime.now())
+                .usuarioResponsableId(Long.valueOf(userId))
+                .usuarioResponsableNombre(userInfo.getNombreCompleto())
+                .usuarioResponsableRol("DOCENTE")
+                .build();
+
+        progressEventPublisher.publicarFormatoAEnviado(event);
+
+        // 8. Retornar respuesta
+        return new IdResponse(guardado.getId());
     }
 
     @Override
@@ -232,8 +303,66 @@ public class SubmissionService implements ISubmissionService {
 
     @Override
     public IdResponse reenviarFormatoA(String userId, Long proyectoId, MultipartFile pdf, MultipartFile carta) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método reenviarFormatoA aún no implementado");
+        log.info("🔄 Reenviando Formato A - Proyecto: {}, Usuario: {}", proyectoId, userId);
+
+        // 1. Validar que el proyecto existe
+        ProyectoSubmission proyecto = submissionRepository.findById(proyectoId)
+                .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado: " + proyectoId));
+
+        // 2. Validar que el usuario es el director
+        if (!proyecto.getDocenteDirectorId().equals(Long.valueOf(userId))) {
+            throw new IllegalArgumentException("Solo el director del proyecto puede reenviar el Formato A");
+        }
+
+        // 3. Validar que no está rechazado definitivamente
+        if ("RECHAZADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
+            throw new IllegalArgumentException("El proyecto fue rechazado definitivamente, no se puede reenviar");
+        }
+
+        // 4. Validar que no excede 3 intentos
+        if (proyecto.getNumeroIntentos() >= 3) {
+            throw new IllegalArgumentException("Se alcanzó el máximo de intentos (3)");
+        }
+
+        // 5. Validar archivos
+        if (pdf == null || pdf.isEmpty()) {
+            throw new IllegalArgumentException("El PDF del Formato A es obligatorio");
+        }
+
+        // 6. Guardar nuevos archivos
+        String rutaPdf = "/uploads/formatoA/v" + (proyecto.getNumeroIntentos() + 1) + "_" + pdf.getOriginalFilename();
+        String rutaCarta = carta != null ? "/uploads/cartas/v" + (proyecto.getNumeroIntentos() + 1) + "_" + carta.getOriginalFilename() : null;
+
+        // 7. Actualizar proyecto
+        proyecto.setRutaFormatoA(rutaPdf);
+        if (rutaCarta != null) {
+            proyecto.setRutaCarta(rutaCarta);
+        }
+        proyecto.setNumeroIntentos(proyecto.getNumeroIntentos() + 1);
+        proyecto.setFechaUltimaModificacion(LocalDateTime.now());
+
+        // 8. Guardar en BD
+        ProyectoSubmission actualizado = submissionRepository.save(proyecto);
+        log.info("✅ Formato A reenviado - Intento: {}/3", actualizado.getNumeroIntentos());
+
+        // 9. Obtener información del usuario
+        IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
+
+        // 10. Publicar evento a Progress Tracking (NUEVO)
+        FormatoAReenviadoEvent event = FormatoAReenviadoEvent.builder()
+                .proyectoId(actualizado.getId())
+                .version(actualizado.getNumeroIntentos())
+                .descripcion("Correcciones aplicadas - versión " + actualizado.getNumeroIntentos())
+                .timestamp(LocalDateTime.now())
+                .usuarioResponsableId(Long.valueOf(userId))
+                .usuarioResponsableNombre(userInfo.getNombreCompleto())
+                .usuarioResponsableRol("DOCENTE")
+                .build();
+
+        progressEventPublisher.publicarFormatoAReenviado(event);
+
+        // 11. Retornar respuesta
+        return new IdResponse(actualizado.getId());
     }
 
     @Override
@@ -244,8 +373,58 @@ public class SubmissionService implements ISubmissionService {
 
     @Override
     public IdResponse subirAnteproyecto(String userId, AnteproyectoData data, MultipartFile pdf) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método subirAnteproyecto aún no implementado");
+        log.info("📄 Subiendo anteproyecto - Proyecto: {}, Usuario: {}", data.getProyectoId(), userId);
+
+        // 1. Validar archivo
+        if (pdf == null || pdf.isEmpty()) {
+            throw new IllegalArgumentException("El PDF del anteproyecto es obligatorio");
+        }
+
+        // 2. Validar que el proyecto existe
+        ProyectoSubmission proyecto = submissionRepository.findById(data.getProyectoId())
+                .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado: " + data.getProyectoId()));
+
+        // 3. Validar que el usuario es el director
+        if (!proyecto.getDocenteDirectorId().equals(Long.valueOf(userId))) {
+            throw new IllegalArgumentException("Solo el director del proyecto puede subir el anteproyecto");
+        }
+
+        // 4. Validar que el Formato A está aprobado
+        if (!"ACEPTADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
+            throw new IllegalArgumentException("El Formato A debe estar aprobado para subir el anteproyecto");
+        }
+
+        // 5. Guardar archivo del anteproyecto
+        String rutaAnteproyecto = "/uploads/anteproyectos/" + data.getProyectoId() + "_" + pdf.getOriginalFilename();
+
+        // 6. Actualizar estado del proyecto
+        // TODO: Si la entidad tiene campo rutaAnteproyecto, descomentarlo
+        // proyecto.setRutaAnteproyecto(rutaAnteproyecto);
+        proyecto.setFechaUltimaModificacion(LocalDateTime.now());
+        // TODO: Si existe estado ANTEPROYECTO_ENVIADO, descomentarlo
+        // proyecto.setEstadoNombre("ANTEPROYECTO_ENVIADO");
+
+        // 7. Guardar en BD
+        ProyectoSubmission actualizado = submissionRepository.save(proyecto);
+        log.info("✅ Anteproyecto subido para proyecto: {}", actualizado.getId());
+
+        // 8. Obtener información del usuario
+        IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
+
+        // 9. Publicar evento a Progress Tracking (NUEVO)
+        AnteproyectoEnviadoEvent event = AnteproyectoEnviadoEvent.builder()
+                .proyectoId(actualizado.getId())
+                .descripcion("Anteproyecto completo enviado")
+                .timestamp(LocalDateTime.now())
+                .usuarioResponsableId(Long.valueOf(userId))
+                .usuarioResponsableNombre(userInfo.getNombreCompleto())
+                .usuarioResponsableRol("DOCENTE")
+                .build();
+
+        progressEventPublisher.publicarAnteproyectoEnviado(event);
+
+        // 10. Retornar respuesta
+        return new IdResponse(actualizado.getId());
     }
 
     @Override
