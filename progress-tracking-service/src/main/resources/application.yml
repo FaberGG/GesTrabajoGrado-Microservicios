@@ -26,6 +26,15 @@ spring:
     username: guest
     password: guest
 
+# Configuración de RabbitMQ para consumir eventos
+rabbitmq:
+  exchange:
+    name: project.events.exchange
+  queue:
+    name: progress.tracking.queue
+  routing:
+    key: project.#
+
 jwt:
   secret: your-secret-key-change-in-production
 

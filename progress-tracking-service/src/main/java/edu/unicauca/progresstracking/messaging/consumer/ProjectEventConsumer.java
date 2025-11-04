@@ -1,20 +1,34 @@
 package edu.unicauca.progresstracking.messaging.consumer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.unicauca.progresstracking.domain.entity.HistorialEvento;
 import edu.unicauca.progresstracking.domain.repository.HistorialEventoRepository;
-import edu.unicauca.progresstracking.messaging.events.*;
 import edu.unicauca.progresstracking.service.ProjectStateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+
 /**
- * Consumer de eventos RabbitMQ para Progress Tracking
+ * Consumer de eventos RabbitMQ para Progress Tracking (CQRS Read Model)
  *
- * Este componente escucha la cola de eventos y actualiza:
- * 1. El historial de eventos (tabla historial_eventos)
- * 2. La vista materializada del estado actual (tabla proyecto_estado)
+ * RESPONSABILIDADES:
+ * 1. Escuchar eventos de dominio desde submission-service y review-service
+ * 2. Guardar eventos en historial_eventos (Event Store inmutable)
+ * 3. Proyectar eventos en proyecto_estado (Vista Materializada)
+ *
+ * COLAS CONSUMIDAS:
+ * - progress.formato-a.queue: eventos formato-a.enviado, formato-a.reenviado
+ * - progress.anteproyecto.queue: eventos anteproyecto.enviado
+ * - progress.proyecto.queue: eventos proyecto.rechazado-definitivamente
+ * - progress.evaluacion.queue: eventos formatoa.evaluado, anteproyecto.evaluado
  */
 @Component
 @RequiredArgsConstructor
@@ -23,182 +37,282 @@ public class ProjectEventConsumer {
 
     private final HistorialEventoRepository historialRepository;
     private final ProjectStateService projectStateService;
+    private final ObjectMapper objectMapper;
+
+    // ==========================================
+    // EVENTOS DE FORMATO A (ENVÍO Y REENVÍO)
+    // ==========================================
 
     /**
-     * Consumir evento: Formato A enviado (primera vez)
+     * Consumir eventos de Formato A desde submission-service
+     *
+     * Routing keys manejadas:
+     * - formato-a.enviado (v1)
+     * - formato-a.reenviado (v2, v3)
      */
-    @RabbitListener(queues = "${rabbitmq.queue.name}")
-    public void onFormatoAEnviado(FormatoAEnviadoEvent event) {
-        log.info("📥 Evento recibido: FORMATO_A_ENVIADO - Proyecto: {}, Versión: {}",
-                event.getProyectoId(), event.getVersion());
-
+    @RabbitListener(queues = "progress.formato-a.queue")
+    public void onFormatoAEvent(
+            @Payload Map<String, Object> payload,
+            @Header("amqp_receivedRoutingKey") String routingKey
+    ) {
         try {
-            // 1. Guardar en historial
+            log.info("📥 [FORMATO A] Evento recibido: {} - Payload: {}", routingKey, payload);
+
+            // Extraer datos del payload
+            Long proyectoId = extractLong(payload, "proyectoId");
+            Integer version = extractInteger(payload, "version");
+            String titulo = (String) payload.getOrDefault("titulo", "Sin título");
+            Long directorId = extractLong(payload, "directorId");
+            String timestamp = (String) payload.get("timestamp");
+
+            // Determinar tipo de evento y estado
+            String tipoEvento = "formato-a.enviado".equals(routingKey)
+                    ? "FORMATO_A_ENVIADO"
+                    : "FORMATO_A_REENVIADO";
+
+            String nuevoEstado = determinarEstadoFormatoA(version);
+
+            // 1. Guardar en historial (Event Store)
             HistorialEvento historial = HistorialEvento.builder()
-                    .proyectoId(event.getProyectoId())
-                    .tipoEvento("FORMATO_A_ENVIADO")
-                    .fecha(event.getTimestamp())
-                    .descripcion(event.getDescripcion())
-                    .version(event.getVersion())
-                    .usuarioResponsableId(event.getUsuarioResponsableId())
-                    .usuarioResponsableNombre(event.getUsuarioResponsableNombre())
-                    .usuarioResponsableRol(event.getUsuarioResponsableRol())
+                    .proyectoId(proyectoId)
+                    .tipoEvento(tipoEvento)
+                    .fecha(parseTimestamp(timestamp))
+                    .descripcion(String.format("Formato A v%d enviado: %s", version, titulo))
+                    .version(version)
+                    .metadata(serializeToJson(payload))
                     .build();
 
             historialRepository.save(historial);
-            log.debug("✅ Evento guardado en historial");
+            log.debug("✅ Evento guardado en historial: ID={}", historial.getEventoId());
 
-            // 2. Actualizar estado materializado
-            String nuevoEstado = "FORMATO_A_EN_EVALUACION_" + event.getVersion();
-            projectStateService.actualizarEstado(event.getProyectoId(), nuevoEstado, event);
-            log.info("✅ Estado actualizado a: {}", nuevoEstado);
+            // 2. Actualizar vista materializada
+            projectStateService.actualizarEstadoFormatoA(
+                    proyectoId,
+                    titulo,
+                    version,
+                    nuevoEstado,
+                    directorId,
+                    payload
+            );
+
+            log.info("✅ [FORMATO A] Proyecto {} actualizado a: {}", proyectoId, nuevoEstado);
 
         } catch (Exception e) {
-            log.error("❌ Error procesando FORMATO_A_ENVIADO: {}", e.getMessage(), e);
-            // En producción: enviar a DLQ (Dead Letter Queue)
+            log.error("❌ Error procesando evento Formato A: routingKey={}, error={}",
+                    routingKey, e.getMessage(), e);
+            // TODO: Enviar a DLQ (Dead Letter Queue) en producción
         }
     }
 
-    /**
-     * Consumir evento: Formato A reenviado (correcciones)
-     */
-    @RabbitListener(queues = "${rabbitmq.queue.name}")
-    public void onFormatoAReenviado(FormatoAReenviadoEvent event) {
-        log.info("📥 Evento recibido: FORMATO_A_REENVIADO - Proyecto: {}, Versión: {}",
-                event.getProyectoId(), event.getVersion());
+    // ==========================================
+    // EVENTOS DE ANTEPROYECTO
+    // ==========================================
 
+    /**
+     * Consumir evento: anteproyecto.enviado
+     */
+    @RabbitListener(queues = "progress.anteproyecto.queue")
+    public void onAnteproyectoEvent(@Payload Map<String, Object> payload) {
         try {
+            log.info("📥 [ANTEPROYECTO] Evento recibido: {}", payload);
+
+            Long proyectoId = extractLong(payload, "proyectoId");
+            String titulo = (String) payload.getOrDefault("titulo", "Sin título");
+            String timestamp = (String) payload.get("timestamp");
+
             // Guardar en historial
             HistorialEvento historial = HistorialEvento.builder()
-                    .proyectoId(event.getProyectoId())
-                    .tipoEvento("FORMATO_A_REENVIADO")
-                    .fecha(event.getTimestamp())
-                    .descripcion(event.getDescripcion())
-                    .version(event.getVersion())
-                    .usuarioResponsableId(event.getUsuarioResponsableId())
-                    .usuarioResponsableNombre(event.getUsuarioResponsableNombre())
-                    .usuarioResponsableRol(event.getUsuarioResponsableRol())
+                    .proyectoId(proyectoId)
+                    .tipoEvento("ANTEPROYECTO_ENVIADO")
+                    .fecha(parseTimestamp(timestamp))
+                    .descripcion("Anteproyecto enviado: " + titulo)
+                    .metadata(serializeToJson(payload))
                     .build();
 
             historialRepository.save(historial);
 
             // Actualizar estado
-            String nuevoEstado = "FORMATO_A_EN_EVALUACION_" + event.getVersion();
-            projectStateService.actualizarEstado(event.getProyectoId(), nuevoEstado, event);
-            log.info("✅ Estado actualizado a: {}", nuevoEstado);
+            projectStateService.actualizarEstadoAnteproyecto(
+                    proyectoId,
+                    "ANTEPROYECTO_ENVIADO",
+                    payload
+            );
+
+            log.info("✅ [ANTEPROYECTO] Proyecto {} actualizado a: ANTEPROYECTO_ENVIADO", proyectoId);
 
         } catch (Exception e) {
-            log.error("❌ Error procesando FORMATO_A_REENVIADO: {}", e.getMessage(), e);
+            log.error("❌ Error procesando evento Anteproyecto: {}", e.getMessage(), e);
         }
     }
 
-    /**
-     * Consumir evento: Formato A evaluado (aprobado/rechazado)
-     */
-    @RabbitListener(queues = "${rabbitmq.queue.name}")
-    public void onFormatoAEvaluado(FormatoAEvaluadoEvent event) {
-        log.info("📥 Evento recibido: FORMATO_A_EVALUADO - Proyecto: {}, Resultado: {}",
-                event.getProyectoId(), event.getResultado());
+    // ==========================================
+    // EVENTOS DE PROYECTO (RECHAZO DEFINITIVO)
+    // ==========================================
 
+    /**
+     * Consumir evento: proyecto.rechazado-definitivamente
+     * Este evento se publica tras el tercer rechazo de Formato A
+     */
+    @RabbitListener(queues = "progress.proyecto.queue")
+    public void onProyectoEvent(@Payload Map<String, Object> payload) {
         try {
+            log.info("📥 [PROYECTO] Evento recibido: {}", payload);
+
+            Long proyectoId = extractLong(payload, "proyectoId");
+            String titulo = (String) payload.getOrDefault("titulo", "Sin título");
+            String timestamp = (String) payload.get("timestamp");
+
             // Guardar en historial
             HistorialEvento historial = HistorialEvento.builder()
-                    .proyectoId(event.getProyectoId())
-                    .tipoEvento("FORMATO_A_EVALUADO")
-                    .fecha(event.getTimestamp())
-                    .descripcion("Formato A evaluado: " + event.getResultado())
-                    .version(event.getVersion())
-                    .resultado(event.getResultado())
-                    .observaciones(event.getObservaciones())
-                    .usuarioResponsableId(event.getUsuarioResponsableId())
-                    .usuarioResponsableNombre(event.getUsuarioResponsableNombre())
-                    .usuarioResponsableRol(event.getUsuarioResponsableRol())
+                    .proyectoId(proyectoId)
+                    .tipoEvento("PROYECTO_RECHAZADO_DEFINITIVO")
+                    .fecha(parseTimestamp(timestamp))
+                    .descripcion("Proyecto rechazado definitivamente tras 3 intentos: " + titulo)
+                    .resultado("RECHAZADO_DEFINITIVO")
+                    .metadata(serializeToJson(payload))
+                    .build();
+
+            historialRepository.save(historial);
+
+            // Actualizar estado a rechazado definitivo
+            projectStateService.actualizarEstadoRechazadoDefinitivo(proyectoId);
+
+            log.info("✅ [PROYECTO] Proyecto {} marcado como RECHAZADO_DEFINITIVO", proyectoId);
+
+        } catch (Exception e) {
+            log.error("❌ Error procesando evento Proyecto: {}", e.getMessage(), e);
+        }
+    }
+
+    // ==========================================
+    // EVENTOS DE EVALUACIÓN (DESDE REVIEW-SERVICE)
+    // ==========================================
+
+    /**
+     * Consumir eventos de evaluación desde review-service
+     *
+     * Routing keys:
+     * - formatoa.evaluado
+     * - anteproyecto.evaluado
+     */
+    @RabbitListener(queues = "progress.evaluacion.queue")
+    public void onEvaluacionEvent(
+            @Payload Map<String, Object> payload,
+            @Header("amqp_receivedRoutingKey") String routingKey
+    ) {
+        try {
+            log.info("📥 [EVALUACIÓN] Evento recibido: {} - Payload: {}", routingKey, payload);
+
+            Long proyectoId = extractLong(payload, "proyectoId");
+            String resultado = (String) payload.get("resultado"); // APROBADO / RECHAZADO
+            String observaciones = (String) payload.getOrDefault("observaciones", "");
+            Integer version = extractInteger(payload, "version");
+            Boolean rechazadoDefinitivo = (Boolean) payload.getOrDefault("rechazadoDefinitivo", false);
+            String timestamp = (String) payload.get("timestamp");
+
+            String tipoEvento = "formatoa.evaluado".equals(routingKey)
+                    ? "FORMATO_A_EVALUADO"
+                    : "ANTEPROYECTO_EVALUADO";
+
+            // Guardar en historial
+            HistorialEvento historial = HistorialEvento.builder()
+                    .proyectoId(proyectoId)
+                    .tipoEvento(tipoEvento)
+                    .fecha(parseTimestamp(timestamp))
+                    .descripcion(String.format("Evaluación completada: %s", resultado))
+                    .version(version)
+                    .resultado(resultado)
+                    .observaciones(observaciones)
+                    .metadata(serializeToJson(payload))
                     .build();
 
             historialRepository.save(historial);
 
             // Determinar nuevo estado según resultado
-            String nuevoEstado;
-            if ("APROBADO".equals(event.getResultado())) {
-                nuevoEstado = "FORMATO_A_APROBADO";
+            if ("formatoa.evaluado".equals(routingKey)) {
+                String nuevoEstado = determinarEstadoEvaluacionFormatoA(resultado, version, rechazadoDefinitivo);
+                projectStateService.actualizarEstadoEvaluacionFormatoA(
+                        proyectoId,
+                        nuevoEstado,
+                        resultado,
+                        rechazadoDefinitivo
+                );
+                log.info("✅ [EVALUACIÓN FORMATO A] Proyecto {} -> {}", proyectoId, nuevoEstado);
             } else {
-                if (event.getRechazadoDefinitivo() != null && event.getRechazadoDefinitivo()) {
-                    nuevoEstado = "FORMATO_A_RECHAZADO_DEFINITIVO";
-                } else {
-                    nuevoEstado = "FORMATO_A_RECHAZADO_" + event.getVersion();
-                }
+                String nuevoEstado = "APROBADO".equals(resultado)
+                        ? "ANTEPROYECTO_APROBADO"
+                        : "ANTEPROYECTO_RECHAZADO";
+                projectStateService.actualizarEstadoEvaluacionAnteproyecto(proyectoId, nuevoEstado);
+                log.info("✅ [EVALUACIÓN ANTEPROYECTO] Proyecto {} -> {}", proyectoId, nuevoEstado);
             }
 
-            projectStateService.actualizarEstado(event.getProyectoId(), nuevoEstado, event);
-            log.info("✅ Estado actualizado a: {}", nuevoEstado);
-
         } catch (Exception e) {
-            log.error("❌ Error procesando FORMATO_A_EVALUADO: {}", e.getMessage(), e);
+            log.error("❌ Error procesando evento Evaluación: routingKey={}, error={}",
+                    routingKey, e.getMessage(), e);
         }
     }
 
-    /**
-     * Consumir evento: Anteproyecto enviado
-     */
-    @RabbitListener(queues = "${rabbitmq.queue.name}")
-    public void onAnteproyectoEnviado(AnteproyectoEnviadoEvent event) {
-        log.info("📥 Evento recibido: ANTEPROYECTO_ENVIADO - Proyecto: {}",
-                event.getProyectoId());
+    // ==========================================
+    // MÉTODOS AUXILIARES
+    // ==========================================
 
-        try {
-            HistorialEvento historial = HistorialEvento.builder()
-                    .proyectoId(event.getProyectoId())
-                    .tipoEvento("ANTEPROYECTO_ENVIADO")
-                    .fecha(event.getTimestamp())
-                    .descripcion(event.getDescripcion())
-                    .usuarioResponsableId(event.getUsuarioResponsableId())
-                    .usuarioResponsableNombre(event.getUsuarioResponsableNombre())
-                    .usuarioResponsableRol(event.getUsuarioResponsableRol())
-                    .build();
+    private String determinarEstadoFormatoA(Integer version) {
+        return switch (version) {
+            case 1 -> "EN_PRIMERA_EVALUACION_FORMATO_A";
+            case 2 -> "EN_SEGUNDA_EVALUACION_FORMATO_A";
+            case 3 -> "EN_TERCERA_EVALUACION_FORMATO_A";
+            default -> "FORMATO_A_ENVIADO_V" + version;
+        };
+    }
 
-            historialRepository.save(historial);
-
-            projectStateService.actualizarEstado(
-                    event.getProyectoId(),
-                    "ANTEPROYECTO_ENVIADO",
-                    event
-            );
-            log.info("✅ Estado actualizado a: ANTEPROYECTO_ENVIADO");
-
-        } catch (Exception e) {
-            log.error("❌ Error procesando ANTEPROYECTO_ENVIADO: {}", e.getMessage(), e);
+    private String determinarEstadoEvaluacionFormatoA(String resultado, Integer version, Boolean rechazadoDefinitivo) {
+        if ("APROBADO".equals(resultado)) {
+            return "FORMATO_A_APROBADO";
+        } else {
+            if (rechazadoDefinitivo != null && rechazadoDefinitivo) {
+                return "FORMATO_A_RECHAZADO_DEFINITIVO";
+            } else {
+                return "FORMATO_A_RECHAZADO_" + version;
+            }
         }
     }
 
-    /**
-     * Consumir evento: Evaluadores asignados
-     */
-    @RabbitListener(queues = "${rabbitmq.queue.name}")
-    public void onEvaluadoresAsignados(EvaluadoresAsignadosEvent event) {
-        log.info("📥 Evento recibido: EVALUADORES_ASIGNADOS - Proyecto: {}",
-                event.getProyectoId());
+    private Long extractLong(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return null;
+    }
 
+    private Integer extractInteger(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return null;
+    }
+
+    private LocalDateTime parseTimestamp(String timestamp) {
+        if (timestamp == null) {
+            return LocalDateTime.now();
+        }
         try {
-            // Convertir lista de evaluadores a string para descripción
-            StringBuilder evaluadores = new StringBuilder();
-            event.getEvaluadores().forEach(e ->
-                    evaluadores.append(e.getNombre()).append(", ")
-            );
+            return LocalDateTime.parse(timestamp, DateTimeFormatter.ISO_DATE_TIME);
+        } catch (Exception e) {
+            log.warn("Error parseando timestamp: {}, usando fecha actual", timestamp);
+            return LocalDateTime.now();
+        }
+    }
 
-            HistorialEvento historial = HistorialEvento.builder()
-                    .proyectoId(event.getProyectoId())
-                    .tipoEvento("EVALUADORES_ASIGNADOS")
-                    .fecha(event.getTimestamp())
-                    .descripcion("Evaluadores asignados: " + evaluadores.toString())
-                    .usuarioResponsableId(event.getUsuarioResponsableId())
-                    .usuarioResponsableNombre(event.getUsuarioResponsableNombre())
-                    .usuarioResponsableRol(event.getUsuarioResponsableRol())
-                    .build();
-
-            historialRepository.save(historial);
-
-            projectStateService.actualizarEstado(
-                    event.getProyectoId(),
+    private String serializeToJson(Map<String, Object> payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            log.warn("Error serializando payload a JSON: {}", e.getMessage());
+            return payload.toString();
+        }
+    }
                     "ANTEPROYECTO_EN_EVALUACION",
                     event
             );
