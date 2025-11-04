@@ -11,17 +11,17 @@ import com.unicauca.identity.exception.EmailAlreadyExistsException;
 import com.unicauca.identity.exception.InvalidCredentialsException;
 import com.unicauca.identity.exception.InvalidTokenException;
 import com.unicauca.identity.exception.UserNotFoundException;
+import com.unicauca.identity.facade.IdentityFacade;
 import com.unicauca.identity.repository.UserRepository;
-import com.unicauca.identity.security.JwtTokenProvider;
 import com.unicauca.identity.service.AuthService;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,24 +29,25 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * Implementación del servicio de autenticación
+ * Implementación del servicio de autenticación.
+ * Delegación de operaciones de seguridad (hashing y JWT) a IdentityFacade.
  */
 @Service
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final IdentityFacade identityFacade;
 
-    // Logger estático para esta clase
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthServiceImpl.class);
 
-    // Constructor explícito para la inyección de dependencias
-    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider) {
+    /**
+     * Constructor con @Lazy para evitar dependencia circular
+     * (IdentityFacade → AuthService → IdentityFacade)
+     */
+    public AuthServiceImpl(UserRepository userRepository,
+                           @Lazy IdentityFacade identityFacade) {
         this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtTokenProvider = jwtTokenProvider;
+        this.identityFacade = identityFacade;
     }
 
     @Override
@@ -57,7 +58,7 @@ public class AuthServiceImpl implements AuthService {
             throw new EmailAlreadyExistsException();
         }
 
-        // Crear nuevo usuario con contraseña encriptada
+        // Crear nuevo usuario con contraseña encriptada usando Facade
         User newUser = User.builder()
                 .nombres(request.nombres())
                 .apellidos(request.apellidos())
@@ -65,7 +66,7 @@ public class AuthServiceImpl implements AuthService {
                 .programa(request.programa())
                 .rol(request.rol())
                 .email(request.email())
-                .passwordHash(passwordEncoder.encode(request.password()))
+                .passwordHash(identityFacade.hashPassword(request.password()))
                 .build();
 
         User savedUser = userRepository.save(newUser);
@@ -80,13 +81,13 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(InvalidCredentialsException::new);
 
-        // Verificar contraseña
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        // Verificar contraseña usando Facade
+        if (!identityFacade.verifyPassword(request.password(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
         }
 
-        // Generar token JWT
-        String token = jwtTokenProvider.generateToken(user);
+        // Generar token JWT usando Facade
+        String token = identityFacade.generateToken(user);
 
         log.info("Usuario autenticado exitosamente: {}", user.getEmail());
 
@@ -126,11 +127,13 @@ public class AuthServiceImpl implements AuthService {
             // Utilizar CompletableFuture con Virtual Threads en lugar de start/join directo
             return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
                 try {
-                    if (!jwtTokenProvider.validateToken(request.token())) {
+                    // Validar token usando Facade
+                    if (!identityFacade.validateToken(request.token())) {
                         return TokenVerificationResponse.invalid("Token inválido o expirado");
                     }
 
-                    Claims claims = jwtTokenProvider.getAllClaimsFromToken(request.token());
+                    // Extraer claims usando Facade
+                    Claims claims = identityFacade.extractAllClaims(request.token());
                     Long userId = Long.valueOf(claims.get("userId").toString());
                     String email = claims.getSubject();
                     Rol rol = Rol.valueOf(claims.get("rol").toString());
