@@ -313,48 +313,4 @@ public class ProjectEventConsumer {
             return payload.toString();
         }
     }
-                    "ANTEPROYECTO_EN_EVALUACION",
-                    event
-            );
-            log.info("✅ Estado actualizado a: ANTEPROYECTO_EN_EVALUACION");
-
-        } catch (Exception e) {
-            log.error("❌ Error procesando EVALUADORES_ASIGNADOS: {}", e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Consumir evento: Anteproyecto evaluado
-     */
-    @RabbitListener(queues = "${rabbitmq.queue.name}")
-    public void onAnteproyectoEvaluado(AnteproyectoEvaluadoEvent event) {
-        log.info("📥 Evento recibido: ANTEPROYECTO_EVALUADO - Proyecto: {}, Resultado: {}",
-                event.getProyectoId(), event.getResultado());
-
-        try {
-            HistorialEvento historial = HistorialEvento.builder()
-                    .proyectoId(event.getProyectoId())
-                    .tipoEvento("ANTEPROYECTO_EVALUADO")
-                    .fecha(event.getTimestamp())
-                    .descripcion("Anteproyecto evaluado: " + event.getResultado())
-                    .resultado(event.getResultado())
-                    .observaciones(event.getObservaciones())
-                    .usuarioResponsableId(event.getUsuarioResponsableId())
-                    .usuarioResponsableNombre(event.getUsuarioResponsableNombre())
-                    .usuarioResponsableRol(event.getUsuarioResponsableRol())
-                    .build();
-
-            historialRepository.save(historial);
-
-            String nuevoEstado = "APROBADO".equals(event.getResultado())
-                    ? "ANTEPROYECTO_APROBADO"
-                    : "ANTEPROYECTO_RECHAZADO";
-
-            projectStateService.actualizarEstado(event.getProyectoId(), nuevoEstado, event);
-            log.info("✅ Estado actualizado a: {}", nuevoEstado);
-
-        } catch (Exception e) {
-            log.error("❌ Error procesando ANTEPROYECTO_EVALUADO: {}", e.getMessage(), e);
-        }
-    }
 }
