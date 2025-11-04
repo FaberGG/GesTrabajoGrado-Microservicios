@@ -1,306 +1,1276 @@
 # 📦 Submission Service
 
-Microservicio para la gestión de entregas de trabajos de grado (Formato A y Anteproyectos).
+Microservicio para la gestión de entregas de trabajos de grado (Formato A y Anteproyectos) en el sistema de Gestión de Trabajos de Grado de la Universidad del Cauca.
 
-## 🎯 Responsabilidades
+## 🎯 Responsabilidades del Microservicio
 
-- **RF2**: Crear Formato A inicial (hasta 3 intentos)
-- **RF4**: Reenviar Formato A tras rechazo
-- **RF6**: Subir Anteproyecto
-- Gestión de estados de documentos
-- Almacenamiento de archivos PDF
-- Publicación de eventos a RabbitMQ
+Este microservicio implementa los siguientes requisitos funcionales:
 
-## 🏗 Arquitectura
+- **RF2**: Yo como docente necesito subir el formato A para comenzar el proceso de proyecto de grado
+- **RF4**: Yo como docente necesito subir una nueva versión del formato A cuando hubo una evaluación de rechazado
+- **RF6**: Yo como docente necesito subir el anteproyecto para continuar con el proceso de proyecto de grado
+- **RF5 (Parcial)**: Proporciona información sobre el estado del proyecto para que estudiantes puedan consultarlo
+- **RF7 (Parcial)**: Proporciona listado de anteproyectos para que el jefe de departamento los visualice
 
-### Entidades de Dominio
+### Funcionalidades Principales
 
-- **ProyectoGrado**: Información del proyecto y metadatos
-- **FormatoA**: Versiones del Formato A (v1, v2, v3)
-- **Anteproyecto**: Documento final del anteproyecto
+- ✅ Gestión de Formato A con hasta 3 intentos de envío
+- ✅ Validación de carta de aceptación para modalidad de Práctica Profesional
+- ✅ Gestión de anteproyectos vinculados a proyectos aprobados
+- ✅ Almacenamiento seguro de archivos PDF
+- ✅ Publicación de eventos asíncronos a RabbitMQ para notificaciones
+- ✅ Control de estados del proyecto y documentos
 
-### Estados
+## 🏗 Arquitectura del Dominio
 
-#### Estado Proyecto
-- `EN_PROCESO`: Proyecto creado, esperando aprobación
-- `APROBADO`: Formato A aprobado
-- `RECHAZADO`: Formato A rechazado (puede reenviar)
-- `RECHAZADO_DEFINITIVO`: 3 rechazos, no puede continuar
+### Entidades Principales
 
-#### Estado Formato
-- `PENDIENTE`: Esperando evaluación
-- `APROBADO`: Aprobado por coordinador
-- `RECHAZADO`: Rechazado, debe reenviar
+#### ProyectoGrado
+Representa un proyecto de grado y su ciclo de vida completo.
 
-## 📡 API Endpoints
+**Atributos:**
+- `id`: Integer - Identificador único del proyecto
+- `titulo`: String - Título del proyecto (máx. 300 caracteres)
+- `modalidad`: enumModalidad - INVESTIGACION o PRACTICA_PROFESIONAL
+- `fechaCreacion`: LocalDateTime - Fecha de creación del proyecto
+- `directorId`: Integer - ID del docente director (requerido)
+- `codirectorId`: Integer - ID del docente codirector (opcional)
+- `objetivoGeneral`: String (text) - Objetivo general del proyecto
+- `objetivosEspecificos`: String (text) - Lista de objetivos específicos
+- `estudiante1Id`: Integer - ID del estudiante principal (requerido)
+- `estudiante2Id`: Integer - ID del segundo estudiante (opcional, solo para INVESTIGACION)
+- `estado`: enumEstadoProyecto - Estado actual del proyecto
+- `numeroIntentos`: Integer - Número de intentos de envío de Formato A (1-3)
 
-### Formato A
+#### FormatoA
+Representa una versión específica del Formato A enviado.
 
-```http
-POST /api/submissions/formatoA
-Content-Type: multipart/form-data
-Headers: X-User-Role: DOCENTE, X-User-Id: {id}
+**Atributos:**
+- `id`: Long - Identificador único de la versión
+- `proyectoId`: Long - Referencia al proyecto
+- `version`: Integer - Número de versión (1, 2, o 3)
+- `estado`: enumEstadoFormato - PENDIENTE, APROBADO, RECHAZADO
+- `observaciones`: String - Comentarios del evaluador
+- `nombreArchivo`: String - Nombre del archivo PDF
+- `pdfUrl`: String - Ruta de almacenamiento del PDF
+- `cartaUrl`: String - Ruta de la carta de aceptación (si aplica)
+- `fechaEnvio`: LocalDateTime - Fecha y hora de envío
 
-Parts:
-- data (JSON): { titulo, modalidad, objetivoGeneral, ... }
-- pdf (File): Documento PDF del Formato A
-- carta (File): Carta de aceptación (obligatoria si PRACTICA_PROFESIONAL)
+#### Anteproyecto
+Representa el documento de anteproyecto final.
 
-Response: 201 Created { "id": 1 }
+**Atributos:**
+- `id`: Long - Identificador único
+- `proyectoId`: Long - Referencia al proyecto
+- `pdfUrl`: String - Ruta del documento PDF
+- `fechaEnvio`: LocalDateTime - Fecha de envío
+- `estado`: String - Estado del anteproyecto
+
+### Enumeraciones
+
+#### enumModalidad
+Define las modalidades de proyecto permitidas según el reglamento.
+
+```java
+INVESTIGACION        // Hasta 2 estudiantes (Art. 9)
+PRACTICA_PROFESIONAL // 1 estudiante, requiere carta de aceptación (Art. 29)
 ```
 
-```http
-GET /api/submissions/formatoA/{id}
-Response: 200 OK { FormatoAView }
+#### enumEstadoProyecto
+Estados del ciclo de vida del proyecto.
+
+```java
+EN_PROCESO              // Proyecto creado, en evaluación
+APROBADO                // Formato A aprobado, puede subir anteproyecto
+RECHAZADO               // Rechazado, puede reenviar (intentos < 3)
+RECHAZADO_DEFINITIVO    // 3 rechazos, proyecto finalizado
 ```
 
-```http
-GET /api/submissions/formatoA?docenteId=101&page=0&size=20
-Response: 200 OK { FormatoAPage }
+#### enumEstadoFormato
+Estados de una versión de Formato A.
+
+```java
+PENDIENTE  // Enviado, esperando evaluación del coordinador
+APROBADO   // Aprobado por el coordinador
+RECHAZADO  // Rechazado con observaciones
 ```
 
-```http
-POST /api/submissions/formatoA/{proyectoId}/nueva-version
-Content-Type: multipart/form-data
-Headers: X-User-Role: DOCENTE
+## 🔐 Seguridad y Autenticación
 
-Parts:
-- pdf (File): Nueva versión del documento
-- carta (File): Carta si aplica
+### Flujo de Autenticación
 
-Response: 201 Created { "id": 1 }
-```
+Este microservicio **NO maneja autenticación directamente**. La autenticación se realiza en el **API Gateway** de la siguiente manera:
 
-```http
-PATCH /api/submissions/formatoA/{versionId}/estado
-Content-Type: application/json
-Headers: X-Service: review
+1. El usuario inicia sesión en el API Gateway (endpoint `/api/auth/login`)
+2. El Gateway valida credenciales contra el **Identity Service**
+3. El Gateway genera un **JWT (JSON Web Token)** 
+4. El JWT se envía al cliente en la respuesta
+5. El cliente incluye el JWT en el header `Authorization: Bearer {token}` en cada petición
+6. El Gateway **valida el JWT** y extrae la información del usuario
+7. El Gateway **propaga headers** al Submission Service con la información del usuario:
+   - `X-User-Id`: ID del usuario autenticado
+   - `X-User-Role`: Rol del usuario (DOCENTE, COORDINADOR, ESTUDIANTE, JEFE_DEPARTAMENTO)
+   - `X-User-Email`: Email del usuario
 
-Body: {
-  "estado": "APROBADO",
-  "observaciones": "Excelente propuesta",
-  "evaluadoPor": 50
-}
+### Headers Requeridos desde el Gateway
 
-Response: 200 OK
-```
+Todos los endpoints de este microservicio esperan recibir estos headers del Gateway:
 
-### Anteproyecto
+| Header | Tipo | Descripción | Requerido |
+|--------|------|-------------|-----------|
+| `X-User-Id` | String | ID del usuario autenticado | ✅ Sí (para endpoints de creación) |
+| `X-User-Role` | String | Rol del usuario | ✅ Sí (para validación de permisos) |
+| `X-User-Email` | String | Email del usuario | ⚠️ Opcional |
 
-```http
-POST /api/submissions/anteproyecto
-Content-Type: multipart/form-data
-Headers: X-User-Role: DOCENTE, X-User-Id: {id}
+### Headers para Comunicación entre Microservicios
 
-Parts:
-- data (JSON): { "proyectoId": 1 }
-- pdf (File): Documento del anteproyecto
+Para endpoints que solo deben ser llamados por otros microservicios:
 
-Response: 201 Created { "id": 1 }
-```
-
-```http
-GET /api/submissions/anteproyecto?page=0&size=20
-Response: 200 OK { AnteproyectoPage }
-```
-
-```http
-PATCH /api/submissions/anteproyecto/{id}/estado
-Headers: X-Service: review
-Body: { "estado": "APROBADO", "observaciones": "..." }
-Response: 200 OK
-```
-
-## 🐰 Eventos RabbitMQ
-
-### Publicados por Submission Service
-
-| Exchange | Routing Key | Payload | Cuándo |
-|----------|-------------|---------|--------|
-| formato-a-exchange | formato-a.enviado | { proyectoId, version, titulo } | Formato A v1 creado |
-| formato-a-exchange | formato-a.reenviado | { proyectoId, version, titulo } | Nueva versión enviada |
-| anteproyecto-exchange | anteproyecto.enviado | { proyectoId, titulo } | Anteproyecto subido |
-| proyecto-exchange | proyecto.rechazado-definitivamente | { proyectoId, titulo } | 3er rechazo |
-
-## 🔐 Seguridad
-
-### Headers Requeridos (del Gateway)
-
-- `X-User-Id`: ID del usuario autenticado
-- `X-User-Role`: Rol (DOCENTE, COORDINADOR, etc.)
-- `X-User-Email`: Email del usuario
+| Header | Valor | Descripción |
+|--------|-------|-------------|
+| `X-Service` | `review` | Identifica llamadas del Review Service |
 
 ### Validaciones de Autorización
 
-- **DOCENTE**: Puede crear y reenviar Formato A, subir Anteproyecto
-- **Review Service**: Puede cambiar estados (identificado por `X-Service: review`)
+El microservicio valida permisos usando la clase `SecurityRules`:
 
-## 💾 Almacenamiento
+**Para Docentes (X-User-Role: DOCENTE):**
+- ✅ Crear Formato A inicial
+- ✅ Subir nueva versión de Formato A
+- ✅ Subir anteproyecto (si es director del proyecto)
 
-### Estructura de Archivos
+**Para Review Service (X-Service: review):**
+- ✅ Cambiar estado de Formato A (aprobado/rechazado)
+- ✅ Cambiar estado de anteproyecto
+
+**Sin autenticación requerida:**
+- ✅ Listar formatos A (lectura pública)
+- ✅ Listar anteproyectos (lectura pública)
+- ✅ Obtener detalles de un Formato A específico
+
+## 📡 API Endpoints Detallados
+
+### 1. Formato A - Crear Inicial (RF2)
+
+**Endpoint:** `POST /api/submissions/formatoA`
+
+**Descripción:** Permite a un docente crear el Formato A inicial de un proyecto de grado.
+
+**Autenticación:** ✅ Requiere JWT del Gateway
+
+**Headers Requeridos:**
+```http
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+X-User-Role: DOCENTE
+X-User-Id: {userId}
+```
+
+**Request Body (multipart/form-data):**
+
+**Parte 1: `data` (JSON - application/json)**
+```json
+{
+  "titulo": "Sistema de gestión de inventarios usando IoT",
+  "modalidad": "INVESTIGACION",
+  "objetivoGeneral": "Desarrollar un sistema de gestión de inventarios utilizando tecnologías IoT",
+  "objetivosEspecificos": [
+    "Diseñar la arquitectura del sistema IoT",
+    "Implementar sensores de detección de stock",
+    "Desarrollar dashboard de monitoreo en tiempo real"
+  ],
+  "directorId": 101,
+  "codirectorId": 205,
+  "estudiante1Id": 1001,
+  "estudiante2Id": 1002
+}
+```
+
+**Validaciones del DTO `FormatoAData`:**
+- `titulo`: String, obligatorio, no vacío, máximo 300 caracteres
+- `modalidad`: Enum (INVESTIGACION | PRACTICA_PROFESIONAL), obligatorio
+- `objetivoGeneral`: String, obligatorio, no vacío, máximo 1000 caracteres
+- `objetivosEspecificos`: Array de strings, al menos 1 elemento, cada uno no vacío
+- `directorId`: Integer, obligatorio
+- `codirectorId`: Integer, opcional
+- `estudiante1Id`: Integer, obligatorio
+- `estudiante2Id`: Integer, opcional (solo permitido si modalidad es INVESTIGACION)
+
+**Parte 2: `pdf` (File - application/pdf)**
+- Archivo PDF del Formato A
+- Tamaño máximo: 10MB
+
+**Parte 3: `carta` (File - application/pdf) - CONDICIONAL**
+- Carta de aceptación de la empresa
+- **OBLIGATORIA** si modalidad = PRACTICA_PROFESIONAL
+- **OPCIONAL** si modalidad = INVESTIGACION
+- Tamaño máximo: 5MB
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1
+}
+```
+
+**Response DTO:** `IdResponse`
+- `id`: Long - ID del proyecto creado
+
+**Errores Posibles:**
+- `403 Forbidden` - Usuario no es DOCENTE
+- `400 Bad Request` - Validación de datos fallida
+- `400 Bad Request` - Falta carta para PRACTICA_PROFESIONAL
+- `500 Internal Server Error` - Error al guardar archivo
+
+**Eventos Publicados:**
+- Exchange: `formato-a-exchange`
+- Routing Key: `formato-a.enviado`
+- Payload: `{ proyectoId, version: 1, titulo }`
+
+---
+
+### 2. Formato A - Obtener por ID
+
+**Endpoint:** `GET /api/submissions/formatoA/{id}`
+
+**Descripción:** Obtiene los detalles de una versión específica de Formato A.
+
+**Autenticación:** ❌ No requiere autenticación (lectura pública)
+
+**Path Parameters:**
+- `id`: Long - ID de la versión del Formato A
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "proyectoId": 1,
+  "version": 1,
+  "estado": "PENDIENTE",
+  "observaciones": null,
+  "nombreArchivo": "formato_a_v1.pdf",
+  "pdfUrl": "/app/uploads/formato-a/1/v1/documento.pdf",
+  "cartaUrl": "/app/uploads/formato-a/1/v1/carta.pdf",
+  "fechaEnvio": "2025-11-03T10:30:00"
+}
+```
+
+**Response DTO:** `FormatoAView`
+- `id`: Long
+- `proyectoId`: Long
+- `version`: Integer (1, 2, o 3)
+- `estado`: String (PENDIENTE, APROBADO, RECHAZADO)
+- `observaciones`: String (null si no ha sido evaluado)
+- `nombreArchivo`: String
+- `pdfUrl`: String
+- `cartaUrl`: String (null si no aplica)
+- `fechaEnvio`: String (ISO 8601 DateTime)
+
+**Errores Posibles:**
+- `404 Not Found` - ID no existe
+
+---
+
+### 3. Formato A - Listar con Filtros
+
+**Endpoint:** `GET /api/submissions/formatoA`
+
+**Descripción:** Lista los formatos A con paginación y filtrado opcional por docente.
+
+**Autenticación:** ❌ No requiere autenticación (lectura pública)
+
+**Query Parameters:**
+- `docenteId`: String (opcional) - Filtra por ID del docente director
+- `page`: Integer (opcional, default: 0) - Número de página
+- `size`: Integer (opcional, default: 20) - Tamaño de página
+
+**Ejemplo:**
+```http
+GET /api/submissions/formatoA?docenteId=101&page=0&size=10
+```
+
+**Response:** `200 OK`
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "proyectoId": 1,
+      "version": 1,
+      "estado": "PENDIENTE",
+      "observaciones": null,
+      "nombreArchivo": "formato_a_v1.pdf",
+      "pdfUrl": "/app/uploads/formato-a/1/v1/documento.pdf",
+      "cartaUrl": null,
+      "fechaEnvio": "2025-11-03T10:30:00"
+    },
+    {
+      "id": 5,
+      "proyectoId": 3,
+      "version": 2,
+      "estado": "APROBADO",
+      "observaciones": "Excelente propuesta",
+      "nombreArchivo": "formato_a_v2.pdf",
+      "pdfUrl": "/app/uploads/formato-a/3/v2/documento.pdf",
+      "cartaUrl": null,
+      "fechaEnvio": "2025-11-02T14:20:00"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 25
+}
+```
+
+**Response DTO:** `FormatoAPage`
+- `content`: Array de `FormatoAView`
+- `page`: Integer - Número de página actual
+- `size`: Integer - Tamaño de página
+- `totalElements`: Long - Total de elementos
+
+---
+
+### 4. Formato A - Nueva Versión (RF4)
+
+**Endpoint:** `POST /api/submissions/formatoA/{proyectoId}/nueva-version`
+
+**Descripción:** Permite al docente subir una nueva versión del Formato A después de un rechazo.
+
+**Autenticación:** ✅ Requiere JWT del Gateway
+
+**Headers Requeridos:**
+```http
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+X-User-Role: DOCENTE
+X-User-Id: {userId}
+```
+
+**Path Parameters:**
+- `proyectoId`: Long - ID del proyecto
+
+**Request Body (multipart/form-data):**
+
+**Parte 1: `pdf` (File - application/pdf)**
+- Nueva versión del documento PDF
+- Tamaño máximo: 10MB
+
+**Parte 2: `carta` (File - application/pdf) - CONDICIONAL**
+- Nueva carta si el proyecto es PRACTICA_PROFESIONAL
+- Tamaño máximo: 5MB
+
+**Response:** `201 Created`
+```json
+{
+  "id": 2
+}
+```
+
+**Response DTO:** `IdResponse`
+- `id`: Long - ID de la nueva versión creada
+
+**Validaciones:**
+- ✅ Usuario debe ser DOCENTE
+- ✅ Proyecto debe existir
+- ✅ Usuario debe ser el director del proyecto
+- ✅ Estado del proyecto debe ser RECHAZADO
+- ✅ Número de intentos debe ser < 3
+- ✅ Si es tercer intento y se rechaza, proyecto pasa a RECHAZADO_DEFINITIVO
+
+**Errores Posibles:**
+- `403 Forbidden` - Usuario no es DOCENTE o no es el director
+- `400 Bad Request` - Proyecto en estado inválido
+- `400 Bad Request` - Ya se alcanzó el límite de 3 intentos
+- `404 Not Found` - Proyecto no existe
+
+**Eventos Publicados:**
+- Exchange: `formato-a-exchange`
+- Routing Key: `formato-a.reenviado`
+- Payload: `{ proyectoId, version, titulo }`
+
+---
+
+### 5. Formato A - Cambiar Estado (RF3)
+
+**Endpoint:** `PATCH /api/submissions/formatoA/{versionId}/estado`
+
+**Descripción:** Permite al Review Service (coordinador) cambiar el estado de una versión de Formato A.
+
+**Autenticación:** ⚠️ Requiere header de servicio interno
+
+**Headers Requeridos:**
+```http
+Content-Type: application/json
+X-Service: review
+```
+
+**Path Parameters:**
+- `versionId`: Long - ID de la versión del Formato A
+
+**Request Body:**
+```json
+{
+  "estado": "APROBADO",
+  "observaciones": "La propuesta cumple con todos los requisitos. Se aprueba para continuar con el anteproyecto.",
+  "evaluadoPor": 50
+}
+```
+
+**Request DTO:** `EvaluacionRequest`
+- `estado`: Enum (APROBADO | RECHAZADO), obligatorio
+- `observaciones`: String, opcional, máximo 2000 caracteres
+- `evaluadoPor`: Integer, obligatorio - ID del coordinador
+
+**Response:** `200 OK`
+Sin contenido en el body.
+
+**Efectos:**
+- Si `estado = APROBADO`: Proyecto pasa a estado APROBADO
+- Si `estado = RECHAZADO` y intentos < 3: Proyecto pasa a RECHAZADO
+- Si `estado = RECHAZADO` y intentos = 3: Proyecto pasa a RECHAZADO_DEFINITIVO
+
+**Validaciones:**
+- ✅ Header `X-Service` debe ser "review"
+- ✅ Versión debe existir
+- ✅ Estado debe ser válido (APROBADO o RECHAZADO)
+
+**Errores Posibles:**
+- `403 Forbidden` - Header X-Service inválido
+- `404 Not Found` - Versión no existe
+- `400 Bad Request` - Estado inválido
+
+**Eventos Publicados (si es rechazo definitivo):**
+- Exchange: `proyecto-exchange`
+- Routing Key: `proyecto.rechazado-definitivamente`
+- Payload: `{ proyectoId, titulo }`
+
+---
+
+### 6. Anteproyecto - Crear (RF6)
+
+**Endpoint:** `POST /api/submissions/anteproyecto`
+
+**Descripción:** Permite al docente director subir el anteproyecto una vez aprobado el Formato A.
+
+**Autenticación:** ✅ Requiere JWT del Gateway
+
+**Headers Requeridos:**
+```http
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+X-User-Role: DOCENTE
+X-User-Id: {userId}
+```
+
+**Request Body (multipart/form-data):**
+
+**Parte 1: `data` (JSON - application/json)**
+```json
+{
+  "proyectoId": 1
+}
+```
+
+**Request DTO:** `AnteproyectoData`
+- `proyectoId`: Long, obligatorio
+
+**Parte 2: `pdf` (File - application/pdf)**
+- Documento del anteproyecto
+- Tamaño máximo: 15MB
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1
+}
+```
+
+**Response DTO:** `IdResponse`
+- `id`: Long - ID del anteproyecto creado
+
+**Validaciones:**
+- ✅ Usuario debe ser DOCENTE
+- ✅ Usuario debe ser el director del proyecto
+- ✅ Proyecto debe existir
+- ✅ Formato A del proyecto debe estar APROBADO
+- ✅ No debe existir un anteproyecto previo para el proyecto
+
+**Errores Posibles:**
+- `403 Forbidden` - Usuario no es DOCENTE o no es el director
+- `400 Bad Request` - Formato A no está aprobado
+- `400 Bad Request` - Ya existe un anteproyecto para este proyecto
+- `404 Not Found` - Proyecto no existe
+
+**Eventos Publicados:**
+- Exchange: `anteproyecto-exchange`
+- Routing Key: `anteproyecto.enviado`
+- Payload: `{ proyectoId, titulo, directorId, estudiantesIds }`
+
+---
+
+### 7. Anteproyecto - Listar (RF7)
+
+**Endpoint:** `GET /api/submissions/anteproyecto`
+
+**Descripción:** Lista los anteproyectos con paginación (para jefe de departamento).
+
+**Autenticación:** ❌ No requiere autenticación (lectura pública)
+
+**Query Parameters:**
+- `page`: Integer (opcional, default: 0) - Número de página
+- `size`: Integer (opcional, default: 20) - Tamaño de página
+
+**Ejemplo:**
+```http
+GET /api/submissions/anteproyecto?page=0&size=10
+```
+
+**Response:** `200 OK`
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "proyectoId": 1,
+      "pdfUrl": "/app/uploads/anteproyectos/1/documento.pdf",
+      "fechaEnvio": "2025-11-03T15:45:00",
+      "estado": "PENDIENTE"
+    },
+    {
+      "id": 2,
+      "proyectoId": 3,
+      "pdfUrl": "/app/uploads/anteproyectos/3/documento.pdf",
+      "fechaEnvio": "2025-11-02T09:20:00",
+      "estado": "EN_EVALUACION"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 15
+}
+```
+
+**Response DTO:** `AnteproyectoPage`
+- `content`: Array de `AnteproyectoView`
+  - `id`: Long
+  - `proyectoId`: Long
+  - `pdfUrl`: String
+  - `fechaEnvio`: String (ISO 8601 DateTime)
+  - `estado`: String
+- `page`: Integer
+- `size`: Integer
+- `totalElements`: Long
+
+---
+
+### 8. Anteproyecto - Cambiar Estado
+
+**Endpoint:** `PATCH /api/submissions/anteproyecto/{id}/estado`
+
+**Descripción:** Permite al Review Service cambiar el estado de un anteproyecto.
+
+**Autenticación:** ⚠️ Requiere header de servicio interno
+
+**Headers Requeridos:**
+```http
+Content-Type: application/json
+X-Service: review
+```
+
+**Path Parameters:**
+- `id`: Long - ID del anteproyecto
+
+**Request Body:**
+```json
+{
+  "estado": "APROBADO",
+  "observaciones": "El anteproyecto cumple con todos los requisitos metodológicos y técnicos."
+}
+```
+
+**Request DTO:** `CambioEstadoAnteproyectoRequest`
+- `estado`: String, obligatorio
+- `observaciones`: String, opcional, máximo 2000 caracteres
+
+**Response:** `200 OK`
+Sin contenido en el body.
+
+**Validaciones:**
+- ✅ Header `X-Service` debe ser "review"
+- ✅ Anteproyecto debe existir
+
+**Errores Posibles:**
+- `403 Forbidden` - Header X-Service inválido
+- `404 Not Found` - Anteproyecto no existe
+
+---
+
+## 🐰 Eventos RabbitMQ
+
+### Eventos Publicados por Submission Service
+
+El servicio publica eventos para que otros microservicios (principalmente Notification Service) puedan reaccionar.
+
+| Exchange | Routing Key | Cuándo se publica | Payload |
+|----------|-------------|-------------------|---------|
+| `formato-a-exchange` | `formato-a.enviado` | Se crea Formato A v1 (RF2) | `{ "proyectoId": 1, "version": 1, "titulo": "...", "directorId": 101, "estudiantesIds": [1001, 1002], "coordinadorEmail": "coordinador@unicauca.edu.co" }` |
+| `formato-a-exchange` | `formato-a.reenviado` | Se envía nueva versión (RF4) | `{ "proyectoId": 1, "version": 2, "titulo": "...", "directorId": 101, "estudiantesIds": [1001], "coordinadorEmail": "coordinador@unicauca.edu.co" }` |
+| `anteproyecto-exchange` | `anteproyecto.enviado` | Se sube anteproyecto (RF6) | `{ "proyectoId": 1, "titulo": "...", "directorId": 101, "estudiantesIds": [1001], "jefeDepartamentoEmail": "jefe.departamento@unicauca.edu.co" }` |
+| `proyecto-exchange` | `proyecto.rechazado-definitivamente` | Formato A rechazado 3 veces | `{ "proyectoId": 1, "titulo": "...", "directorId": 101, "estudiantesIds": [1001] }` |
+
+### Configuración de RabbitMQ
+
+Los exchanges y queues se crean automáticamente mediante la configuración en `RabbitConfig.java`:
+
+```yaml
+Exchanges:
+  - formato-a-exchange (type: topic)
+  - anteproyecto-exchange (type: topic)
+  - proyecto-exchange (type: topic)
+
+Queues (para este servicio):
+  - Ninguna (este servicio solo publica, no consume)
+```
+
+---
+
+## 💾 Almacenamiento de Archivos
+
+### Estructura de Directorios
 
 ```
 /app/uploads/
 ├── formato-a/
-│   └── {proyectoId}/
-│       ├── v1/
-│       │   ├── documento.pdf
-│       │   └── carta.pdf (si PRACTICA_PROFESIONAL)
-│       ├── v2/
-│       └── v3/
+│   ├── {proyectoId}/
+│   │   ├── v1/
+│   │   │   ├── documento.pdf
+│   │   │   └── carta.pdf (si PRACTICA_PROFESIONAL)
+│   │   ├── v2/
+│   │   │   ├── documento.pdf
+│   │   │   └── carta.pdf (si aplica)
+│   │   └── v3/
+│   │       ├── documento.pdf
+│   │       └── carta.pdf (si aplica)
+│   └── ...
 └── anteproyectos/
-    └── {proyectoId}/
-        └── documento.pdf
+    ├── {proyectoId}/
+    │   └── documento.pdf
+    └── ...
 ```
 
-### Límites de Archivos
+### Límites de Tamaño
 
-- Formato A PDF: **10MB máximo**
-- Carta de aceptación: **5MB máximo**
-- Anteproyecto PDF: **15MB máximo**
+Configurados en `application.yml`:
 
-## 🚀 Despliegue Local
+```yaml
+spring:
+  servlet:
+    multipart:
+      max-file-size: 15MB      # Tamaño máximo por archivo
+      max-request-size: 20MB   # Tamaño máximo total de la petición
+```
+
+**Límites por Tipo:**
+- Formato A PDF: 10MB máximo (recomendado)
+- Carta de aceptación: 5MB máximo (recomendado)
+- Anteproyecto PDF: 15MB máximo
+
+### Permisos Requeridos
+
+El directorio `/app/uploads` debe tener permisos de escritura para el usuario que ejecuta la aplicación:
+
+```bash
+chmod -R 755 /app/uploads
+chown -R app-user:app-group /app/uploads
+```
+
+---
+
+## 📚 Reglas de Negocio Implementadas
+
+### 1. Control de Intentos de Formato A
+
+- ✅ Máximo 3 intentos para enviar Formato A
+- ✅ Después del 3er rechazo, proyecto pasa a RECHAZADO_DEFINITIVO
+- ✅ No se permiten más envíos después del rechazo definitivo
+
+### 2. Validación de Modalidades
+
+#### INVESTIGACION
+- ✅ Permite hasta 2 estudiantes
+- ✅ Carta de aceptación es opcional
+- ✅ Puede tener codirector (opcional)
+
+#### PRACTICA_PROFESIONAL
+- ✅ Permite solo 1 estudiante
+- ✅ Carta de aceptación es OBLIGATORIA
+- ✅ Puede tener codirector (opcional)
+
+### 3. Flujo de Aprobación
+
+```
+1. Docente crea Formato A v1 → Estado: EN_PROCESO
+2. Coordinador evalúa:
+   a. Si APRUEBA → Estado: APROBADO (puede subir anteproyecto)
+   b. Si RECHAZA y intentos < 3 → Estado: RECHAZADO (puede reenviar)
+   c. Si RECHAZA y intentos = 3 → Estado: RECHAZADO_DEFINITIVO (fin)
+3. Si APROBADO, docente puede subir anteproyecto
+4. Jefe de departamento asigna evaluadores (en otro servicio)
+```
+
+### 4. Restricciones de Anteproyecto
+
+- ✅ Solo se puede subir si Formato A está APROBADO
+- ✅ Solo el director del proyecto puede subirlo
+- ✅ Solo se permite 1 anteproyecto por proyecto
+- ✅ No se puede eliminar ni reemplazar (implementación actual)
+
+### 5. Notificaciones Automáticas
+
+- ✅ Al enviar Formato A v1 → Notifica al coordinador
+- ✅ Al reenviar Formato A → Notifica al coordinador
+- ✅ Al subir anteproyecto → Notifica al jefe de departamento
+- ✅ Al aprobar/rechazar → Notifica a director y estudiantes (vía Review Service)
+
+---
+
+## 🔄 Flujo de Estados del Proyecto
+
+```mermaid
+graph TD
+    A[Crear Formato A v1] --> B[EN_PROCESO]
+    B --> C{Evaluación Coordinador}
+    C -->|Aprueba| D[APROBADO]
+    C -->|Rechaza<br/>intento 1 o 2| E[RECHAZADO]
+    C -->|Rechaza<br/>intento 3| F[RECHAZADO_DEFINITIVO]
+    
+    E --> G[Reenviar v2 o v3]
+    G --> B
+    
+    D --> H[Subir Anteproyecto]
+    H --> I[Asignación de Evaluadores]
+    
+    F --> J[FIN - No puede continuar]
+    
+    style D fill:#90EE90
+    style F fill:#FFB6C1
+    style E fill:#FFE4B5
+```
+
+**Leyenda:**
+- 🟢 Verde: Estado exitoso (APROBADO)
+- 🔴 Rojo: Estado final negativo (RECHAZADO_DEFINITIVO)
+- 🟡 Amarillo: Estado temporal (RECHAZADO, puede recuperarse)
+
+---
+
+## 🚀 Despliegue y Configuración
 
 ### Prerequisitos
 
-- Docker Desktop
-- Java 21 (para desarrollo sin Docker)
-- Maven 3.9+
+- ✅ Docker Desktop instalado
+- ✅ Java 21+ (para desarrollo local sin Docker)
+- ✅ Maven 3.9+
+- ✅ PostgreSQL 15+ (si no usa Docker)
+- ✅ RabbitMQ 3.12+ (si no usa Docker)
 
-### Con Docker Compose
+### Opción 1: Con Docker Compose (Recomendado)
 
 ```bash
-# Iniciar servicios (PostgreSQL + RabbitMQ + Submission)
+# 1. Clonar el repositorio
+cd submission-service
+
+# 2. Construir la imagen
+docker-compose build
+
+# 3. Iniciar todos los servicios
 docker-compose up -d
 
-# Ver logs
+# 4. Ver logs en tiempo real
 docker-compose logs -f submission-service
 
-# Detener
+# 5. Verificar estado
+docker-compose ps
+
+# 6. Detener servicios
 docker-compose down
+
+# 7. Detener y eliminar volúmenes (limpieza completa)
+docker-compose down -v
 ```
 
-### Sin Docker (desarrollo)
+### Opción 2: Desarrollo Local sin Docker
 
 ```bash
-# 1. Iniciar PostgreSQL
-docker run -d -p 5432:5432 \
+# 1. Iniciar PostgreSQL con Docker
+docker run -d \
+  --name submission-postgres \
+  -p 5432:5432 \
   -e POSTGRES_DB=submissiondb \
   -e POSTGRES_USER=submission_user \
   -e POSTGRES_PASSWORD=submission_pass \
   postgres:15-alpine
 
-# 2. Iniciar RabbitMQ
-docker run -d -p 5672:5672 -p 15672:15672 \
+# 2. Iniciar RabbitMQ con Docker
+docker run -d \
+  --name submission-rabbitmq \
+  -p 5672:5672 \
+  -p 15672:15672 \
+  -e RABBITMQ_DEFAULT_USER=admin \
+  -e RABBITMQ_DEFAULT_PASS=admin_password \
   rabbitmq:3.12-management-alpine
 
-# 3. Compilar y ejecutar
+# 3. Crear directorio de uploads
+mkdir -p /app/uploads
+chmod 755 /app/uploads
+
+# 4. Compilar el proyecto
 mvn clean install
+
+# 5. Ejecutar la aplicación
 mvn spring-boot:run
+
+# O ejecutar el JAR directamente
+java -jar target/submission-service-0.0.1-SNAPSHOT.jar
 ```
 
+### Opción 3: Compilar JAR para Producción
+
+```bash
+# Compilar sin ejecutar tests
+mvn clean package -DskipTests
+
+# El JAR se genera en:
+# target/submission-service-0.0.1-SNAPSHOT.jar
+
+# Ejecutar con perfil de producción
+java -jar target/submission-service-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=prod
+```
+
+---
+
+## 🔧 Variables de Entorno
+
+### Variables de Base de Datos
+
+| Variable | Descripción | Default | Requerido |
+|----------|-------------|---------|-----------|
+| `DATABASE_HOST` | Host de PostgreSQL | `submission-postgres` | ✅ |
+| `DATABASE_PORT` | Puerto de PostgreSQL | `5432` | ✅ |
+| `DATABASE_NAME` | Nombre de la base de datos | `submissiondb` | ✅ |
+| `DATABASE_USERNAME` | Usuario de la base de datos | `submission_user` | ✅ |
+| `DATABASE_PASSWORD` | Contraseña de la base de datos | `submission_pass` | ✅ |
+
+### Variables de RabbitMQ
+
+| Variable | Descripción | Default | Requerido |
+|----------|-------------|---------|-----------|
+| `RABBITMQ_HOST` | Host de RabbitMQ | `rabbitmq` | ✅ |
+| `RABBITMQ_PORT` | Puerto de RabbitMQ | `5672` | ✅ |
+| `RABBITMQ_USERNAME` | Usuario de RabbitMQ | `admin` | ✅ |
+| `RABBITMQ_PASSWORD` | Contraseña de RabbitMQ | `admin_password` | ✅ |
+
+### Variables de Almacenamiento
+
+| Variable | Descripción | Default | Requerido |
+|----------|-------------|---------|-----------|
+| `FILE_STORAGE_PATH` | Ruta para guardar archivos PDF | `/app/uploads` | ✅ |
+
+### Variables de Integración
+
+| Variable | Descripción | Default | Requerido |
+|----------|-------------|---------|-----------|
+| `IDENTITY_SERVICE_URL` | URL del Identity Service | `http://identity:8081` | ⚠️ |
+| `SERVICE_INTERNAL_TOKEN` | Token para comunicación interna | `default-token-only-for-dev` | ⚠️ |
+| `COORDINADOR_EMAIL` | Email del coordinador (temporal) | `coordinador@unicauca.edu.co` | ⚠️ |
+| `JEFE_DEPARTAMENTO_EMAIL` | Email del jefe (temporal) | `jefe.departamento@unicauca.edu.co` | ⚠️ |
+
+### Variables de Spring
+
+| Variable | Descripción | Default | Requerido |
+|----------|-------------|---------|-----------|
+| `SPRING_PROFILES_ACTIVE` | Perfil activo (dev, prod) | `dev` | ❌ |
+| `SERVER_PORT` | Puerto del servidor | `8082` | ❌ |
+
+### Ejemplo de archivo `.env`
+
+```env
+# Database
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=submissiondb
+DATABASE_USERNAME=submission_user
+DATABASE_PASSWORD=my_secure_password
+
+# RabbitMQ
+RABBITMQ_HOST=localhost
+RABBITMQ_PORT=5672
+RABBITMQ_USERNAME=admin
+RABBITMQ_PASSWORD=admin_password
+
+# Storage
+FILE_STORAGE_PATH=/var/app/uploads
+
+# Integration
+IDENTITY_SERVICE_URL=http://identity-service:8081
+COORDINADOR_EMAIL=coordinador@unicauca.edu.co
+JEFE_DEPARTAMENTO_EMAIL=jefe.departamento@unicauca.edu.co
+
+# Spring
+SPRING_PROFILES_ACTIVE=prod
+SERVER_PORT=8082
+```
+
+---
+
 ## 🧪 Testing
+
+### Ejecutar Tests
 
 ```bash
 # Tests unitarios
 mvn test
 
-# Tests de integración (usa Testcontainers)
+# Tests de integración
 mvn verify
+
+# Tests con reporte de cobertura
+mvn clean verify jacoco:report
 
 # Solo compilar sin tests
 mvn clean package -DskipTests
 ```
 
-## 📊 Monitoring
+### Tests de Integración
+
+El proyecto usa **Testcontainers** para tests de integración con PostgreSQL y RabbitMQ reales:
+
+```java
+@SpringBootTest
+@Testcontainers
+class SubmissionIntegrationTest {
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
+    
+    @Container
+    static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3.12-management-alpine");
+}
+```
+
+### Tests Manuales con cURL
+
+#### 1. Crear Formato A (RF2)
+
+```bash
+curl -X POST http://localhost:8082/api/submissions/formatoA \
+  -H "X-User-Role: DOCENTE" \
+  -H "X-User-Id: 101" \
+  -F 'data={"titulo":"Sistema IoT","modalidad":"INVESTIGACION","objetivoGeneral":"Desarrollar sistema IoT","objetivosEspecificos":["Objetivo 1","Objetivo 2"],"directorId":101,"estudiante1Id":1001};type=application/json' \
+  -F "pdf=@formato_a.pdf" \
+  -F "carta=@carta.pdf"
+```
+
+#### 2. Listar Formatos A
+
+```bash
+curl -X GET "http://localhost:8082/api/submissions/formatoA?page=0&size=10"
+```
+
+#### 3. Nueva Versión (RF4)
+
+```bash
+curl -X POST http://localhost:8082/api/submissions/formatoA/1/nueva-version \
+  -H "X-User-Role: DOCENTE" \
+  -H "X-User-Id: 101" \
+  -F "pdf=@formato_a_v2.pdf"
+```
+
+#### 4. Cambiar Estado (RF3)
+
+```bash
+curl -X PATCH http://localhost:8082/api/submissions/formatoA/1/estado \
+  -H "Content-Type: application/json" \
+  -H "X-Service: review" \
+  -d '{
+    "estado": "APROBADO",
+    "observaciones": "Aprobado para continuar",
+    "evaluadoPor": 50
+  }'
+```
+
+#### 5. Subir Anteproyecto (RF6)
+
+```bash
+curl -X POST http://localhost:8082/api/submissions/anteproyecto \
+  -H "X-User-Role: DOCENTE" \
+  -H "X-User-Id: 101" \
+  -F 'data={"proyectoId":1};type=application/json' \
+  -F "pdf=@anteproyecto.pdf"
+```
+
+---
+
+## 📊 Monitoring y Observabilidad
 
 ### Health Check
+
+Verifica el estado del servicio y sus dependencias:
+
 ```bash
 curl http://localhost:8082/actuator/health
 ```
 
+**Respuesta:**
+```json
+{
+  "status": "UP",
+  "components": {
+    "db": {
+      "status": "UP",
+      "details": {
+        "database": "PostgreSQL",
+        "validationQuery": "isValid()"
+      }
+    },
+    "diskSpace": {
+      "status": "UP",
+      "details": {
+        "total": 500000000000,
+        "free": 250000000000,
+        "threshold": 10485760
+      }
+    },
+    "ping": {
+      "status": "UP"
+    },
+    "rabbit": {
+      "status": "UP",
+      "details": {
+        "version": "3.12.0"
+      }
+    }
+  }
+}
+```
+
 ### Metrics
+
 ```bash
+# Ver todas las métricas disponibles
 curl http://localhost:8082/actuator/metrics
+
+# Métrica específica de JVM
+curl http://localhost:8082/actuator/metrics/jvm.memory.used
+
+# Métrica de HTTP requests
+curl http://localhost:8082/actuator/metrics/http.server.requests
 ```
 
 ### RabbitMQ Management UI
+
+Acceder a la consola de administración de RabbitMQ:
+
 ```
-http://localhost:15672
-Usuario: guest
-Contraseña: guest
+URL: http://localhost:15672
+Usuario: admin (o guest si es instalación local)
+Contraseña: admin_password (o guest)
 ```
 
-## 🔧 Variables de Entorno
+Aquí puedes ver:
+- ✅ Exchanges creados
+- ✅ Queues activas
+- ✅ Mensajes publicados/consumidos
+- ✅ Conexiones activas
 
-| Variable | Descripción | Default |
-|----------|-------------|---------|
-| DATABASE_HOST | Host de PostgreSQL | submission-postgres |
-| DATABASE_PORT | Puerto de PostgreSQL | 5432 |
-| DATABASE_NAME | Nombre de la BD | submissiondb |
-| DATABASE_USERNAME | Usuario de BD | submission_user |
-| DATABASE_PASSWORD | Contraseña de BD | submission_pass |
-| RABBITMQ_HOST | Host de RabbitMQ | rabbitmq |
-| RABBITMQ_PORT | Puerto de RabbitMQ | 5672 |
-| RABBITMQ_USERNAME | Usuario RabbitMQ | admin |
-| RABBITMQ_PASSWORD | Contraseña RabbitMQ | admin_password |
-| FILE_STORAGE_PATH | Ruta de almacenamiento | /app/uploads |
-| SPRING_PROFILES_ACTIVE | Perfil activo | dev |
+### Logs
+
+El servicio usa **Logback** para logging estructurado:
+
+```bash
+# Ver logs en tiempo real (Docker)
+docker-compose logs -f submission-service
+
+# Ver solo errores
+docker-compose logs -f submission-service | grep ERROR
+
+# Ver logs de archivo (si se configuró)
+tail -f /var/log/submission-service/application.log
+```
+
+**Niveles de log configurados:**
+- `root`: INFO
+- `co.unicauca.comunicacionmicroservicios`: DEBUG
+- `org.springframework.amqp`: INFO
+- `org.hibernate.SQL`: DEBUG
+
+---
 
 ## 🐛 Troubleshooting
 
-### Error: "No se pudo guardar el archivo"
-- Verificar permisos del directorio `/app/uploads`
-- Verificar espacio en disco disponible
+### Error: "Solo DOCENTE puede realizar esta acción"
 
-### Error: "Proyecto no existe"
-- Verificar que el proyectoId sea correcto
-- Revisar logs de base de datos
+**Causa:** El header `X-User-Role` no está presente o no es "DOCENTE"
+
+**Solución:**
+```bash
+# Asegurarse de incluir el header correcto
+-H "X-User-Role: DOCENTE"
+```
 
 ### Error: "Carta de aceptación obligatoria"
-- Modalidad PRACTICA_PROFESIONAL requiere carta
-- Verificar que el archivo se está enviando en el multipart
 
-### RabbitMQ connection refused
-- Verificar que RabbitMQ esté corriendo
-- Verificar credenciales en variables de entorno
-- Revisar logs: `docker-compose logs rabbitmq-local`
+**Causa:** Modalidad es PRACTICA_PROFESIONAL pero no se envió el archivo `carta`
 
-## 📚 Reglas de Negocio
-
-1. **Máximo 3 intentos** para Formato A
-2. **PRACTICA_PROFESIONAL**: 1 estudiante + carta obligatoria
-3. **INVESTIGACION**: hasta 2 estudiantes
-4. **Anteproyecto**: solo si Formato A está APROBADO
-5. **Director**: solo el director puede subir anteproyecto
-
-## 🔄 Flujo de Estados
-
-```
-[Crear Formato A v1] → EN_PROCESO
-         ↓
-    [Evaluación]
-    ↙        ↘
-APROBADO   RECHAZADO
-   ↓           ↓
-[Puede subir] [Reenviar v2] → EN_PROCESO
-Anteproyecto    ↓
-            [Evaluación]
-            ↙        ↘
-        APROBADO   RECHAZADO
-           ↓           ↓
-        [Fin]    [Reenviar v3] → EN_PROCESO
-                    ↓
-                [Evaluación]
-                ↙        ↘
-            APROBADO   RECHAZADO
-               ↓           ↓
-            [Fin]  RECHAZADO_DEFINITIVO
+**Solución:**
+```bash
+# Incluir la carta en el multipart
+-F "carta=@carta_aceptacion.pdf"
 ```
 
-## 📞 Contacto
+### Error: "Proyecto en estado inválido para reenvío"
 
-- **Equipo**: Desarrollo Unicauca
-- **Fecha**: Octubre 2025
-- **Versión**: 1.0.0
+**Causa:** Intentando reenviar cuando el proyecto no está en estado RECHAZADO
+
+**Solución:**
+- Verificar que el Formato A fue rechazado
+- No se puede reenviar si ya fue aprobado
+- No se puede reenviar si está en RECHAZADO_DEFINITIVO
+
+### Error: "No se pudo guardar el archivo"
+
+**Causas posibles:**
+1. Permisos insuficientes en `/app/uploads`
+2. Disco lleno
+3. Ruta no existe
+
+**Soluciones:**
+```bash
+# Crear directorio con permisos
+mkdir -p /app/uploads
+chmod 755 /app/uploads
+
+# Verificar espacio en disco
+df -h
+
+# Verificar permisos
+ls -la /app/uploads
+```
+
+### Error: "Connection refused" al conectar con RabbitMQ
+
+**Causas:**
+1. RabbitMQ no está corriendo
+2. Puerto incorrecto
+3. Credenciales incorrectas
+
+**Soluciones:**
+```bash
+# Verificar que RabbitMQ está corriendo
+docker ps | grep rabbitmq
+
+# Reiniciar RabbitMQ
+docker-compose restart rabbitmq
+
+# Verificar logs de RabbitMQ
+docker-compose logs rabbitmq
+
+# Verificar variables de entorno
+echo $RABBITMQ_HOST
+echo $RABBITMQ_PORT
+```
+
+### Error: "Cannot create connection to database"
+
+**Causas:**
+1. PostgreSQL no está corriendo
+2. Credenciales incorrectas
+3. Base de datos no existe
+
+**Soluciones:**
+```bash
+# Verificar PostgreSQL
+docker ps | grep postgres
+
+# Conectarse manualmente para verificar
+docker exec -it submission-postgres psql -U submission_user -d submissiondb
+
+# Ver logs de PostgreSQL
+docker-compose logs submission-postgres
+
+# Recrear base de datos
+docker-compose down -v
+docker-compose up -d
+```
+
+### Error: "File too large"
+
+**Causa:** Archivo excede el límite de 15MB
+
+**Solución:**
+- Comprimir el PDF antes de subir
+- O modificar límite en `application.yml`:
+```yaml
+spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+```
+
+### Error: "Maximum number of attempts reached"
+
+**Causa:** Ya se enviaron 3 versiones del Formato A
+
+**Solución:**
+- No hay solución técnica, es una regla de negocio
+- El proyecto está en RECHAZADO_DEFINITIVO
+- El estudiante debe iniciar un nuevo proyecto
+
+---
+
+## 📞 Información del Proyecto
+
+**Institución:** Universidad del Cauca  
+**Facultad:** Ingeniería Electrónica y Telecomunicaciones  
+**Programa:** Ingeniería de Sistemas  
+**Proyecto:** Sistema de Gestión de Trabajos de Grado  
+**Versión:** 1.0.0  
+**Fecha:** Noviembre 2025  
+
+### Arquitectura de Microservicios
+
+Este servicio es parte de una arquitectura más amplia:
+
+- **API Gateway**: Enrutamiento y autenticación JWT
+- **Identity Service**: Gestión de usuarios y autenticación
+- **Submission Service**: Gestión de Formato A y Anteproyectos (ESTE SERVICIO)
+- **Review Service**: Evaluaciones y asignación de evaluadores
+- **Notification Service**: Envío de correos electrónicos
+- **PostgreSQL**: Base de datos relacional
+- **RabbitMQ**: Mensajería asíncrona
+
+### Tecnologías Utilizadas
+
+- ☕ Java 21
+- 🍃 Spring Boot 3.x
+- 🗄️ PostgreSQL 15
+- 🐰 RabbitMQ 3.12
+- 🐳 Docker & Docker Compose
+- 📦 Maven 3.9+
+- 🧪 JUnit 5 + Testcontainers
+
+### Contacto y Soporte
+
+Para preguntas, problemas o sugerencias:
+- **Email**: soporte-sistemas@unicauca.edu.co
+- **Repositorio**: [GitHub - Submission Service]
+- **Documentación adicional**: Ver carpeta `/docs` en el repositorio
+
+---
+
+## 📄 Licencia
+
+Este proyecto es de uso interno de la Universidad del Cauca.  
+Todos los derechos reservados © 2025
 
