@@ -33,6 +33,8 @@ services:
     url: ${NOTIFICATION_URL:http://notification:8083}
   review:
     url: ${REVIEW_URL:http://review:8084}
+  tracking:
+    url: ${TRACKING_URL:http://tracking:8085}
 
 # JWT Configuration
 jwt:
