@@ -34,6 +34,10 @@ public class SubmissionService implements ISubmissionService {
     private ProgressEventPublisher progressEventPublisher;
 
     @Autowired
+    private NotificationPublisher notificationPublisher;
+
+
+    @Autowired
     private IdentityClient identityClient;
 
     /**
@@ -288,7 +292,27 @@ public class SubmissionService implements ISubmissionService {
         progressEventPublisher.publicarFormatoAEnviado(event);
         */
 
-        // 8. Retornar respuesta
+        // 8. Obtener email del coordinador y enviar notificación (RF2)
+        try {
+            Optional<String> coordinadorEmailOpt = identityClient.getEmailByRole("COORDINADOR");
+            if (coordinadorEmailOpt.isPresent()) {
+                notificationPublisher.notificarFormatoAEnviado(
+                        guardado.getId().intValue(),
+                        guardado.getTitulo(),
+                        1, // versión 1
+                        userInfo.getNombreCompleto(),
+                        coordinadorEmailOpt.get()
+                );
+                log.info("✉️ RF2: Notificación enviada al coordinador: {}", coordinadorEmailOpt.get());
+            } else {
+                log.warn("⚠️ RF2: No se encontró email de coordinador, notificación no enviada");
+            }
+        } catch (Exception e) {
+            log.error("❌ RF2: Error al enviar notificación, pero el Formato A fue creado exitosamente", e);
+            // No fallar la operación principal por error en notificación
+        }
+
+        // 9. Retornar respuesta
         return new IdResponse(guardado.getId());
     }
 
@@ -447,7 +471,7 @@ public class SubmissionService implements ISubmissionService {
         // 9. Obtener información del usuario
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
 
-        // 10. Publicar evento a Progress Tracking (NUEVO)
+        // 10. Publicar evento a Progress Tracking
         FormatoAReenviadoEvent event = FormatoAReenviadoEvent.builder()
                 .proyectoId(actualizado.getId())
                 .version(actualizado.getNumeroIntentos())
@@ -461,7 +485,28 @@ public class SubmissionService implements ISubmissionService {
         progressEventPublisher.publicarFormatoAReenviado(event);
         */
 
-        // 11. Retornar respuesta
+        // 11. Obtener email del coordinador y enviar notificación (RF4)
+        try {
+            Optional<String> coordinadorEmailOpt = identityClient.getEmailByRole("COORDINADOR");
+            if (coordinadorEmailOpt.isPresent()) {
+                notificationPublisher.notificarFormatoAEnviado(
+                        actualizado.getId().intValue(),
+                        actualizado.getTitulo(),
+                        actualizado.getNumeroIntentos(), // versión 2 o 3
+                        userInfo.getNombreCompleto(),
+                        coordinadorEmailOpt.get()
+                );
+                log.info("✉️ RF4: Notificación de reenvío (v{}) enviada al coordinador: {}",
+                         actualizado.getNumeroIntentos(), coordinadorEmailOpt.get());
+            } else {
+                log.warn("⚠️ RF4: No se encontró email de coordinador, notificación no enviada");
+            }
+        } catch (Exception e) {
+            log.error("❌ RF4: Error al enviar notificación, pero el Formato A fue reenviado exitosamente", e);
+            // No fallar la operación principal por error en notificación
+        }
+
+        // 12. Retornar respuesta
         return new IdResponse(actualizado.getId());
     }
 
@@ -571,7 +616,26 @@ public class SubmissionService implements ISubmissionService {
         progressEventPublisher.publicarAnteproyectoEnviado(event);
         */
 
-        // 10. Retornar respuesta
+        // 10. Obtener email del jefe de departamento y enviar notificación (RF6)
+        try {
+            Optional<String> jefeEmailOpt = identityClient.getEmailByRole("JEFE_DEPARTAMENTO");
+            if (jefeEmailOpt.isPresent()) {
+                notificationPublisher.notificarAnteproyectoEnviado(
+                        actualizado.getId().intValue(),
+                        actualizado.getTitulo(),
+                        userInfo.getNombreCompleto(),
+                        jefeEmailOpt.get()
+                );
+                log.info("✉️ RF6: Notificación enviada al jefe de departamento: {}", jefeEmailOpt.get());
+            } else {
+                log.warn("⚠️ RF6: No se encontró email de jefe de departamento, notificación no enviada");
+            }
+        } catch (Exception e) {
+            log.error("❌ RF6: Error al enviar notificación, pero el Anteproyecto fue creado exitosamente", e);
+            // No fallar la operación principal por error en notificación
+        }
+
+        // 11. Retornar respuesta
         return new IdResponse(actualizado.getId());
     }
 
