@@ -47,8 +47,10 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 // Rate limiting antes de JWT para proteger auth endpoints
-              //  .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
-              //  .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // 1. Rate Limit (Antes de la autenticación)
+                .addFilterBefore(rateLimitFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+                // 2. JWT (Para autenticar la petición y rellenar el SecurityContext)
+                .addFilterBefore(jwtAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
