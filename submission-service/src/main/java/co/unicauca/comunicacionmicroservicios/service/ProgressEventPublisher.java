@@ -36,12 +36,13 @@ public class ProgressEventPublisher {
                     event.getProyectoId(), event.getVersion());
 
             rabbitTemplate.convertAndSend(
-                    RabbitConfig.PROJECT_EVENTS_EXCHANGE,
+                    RabbitConfig.FORMATOA_EXCHANGE,
                     RabbitConfig.FORMATOA_SUBMITTED_ROUTING_KEY,
                     event
             );
 
-            log.debug("✅ Evento publicado exitosamente");
+            log.info("✅ Evento publicado exitosamente a exchange: {}, routing-key: {}",
+                    RabbitConfig.FORMATOA_EXCHANGE, RabbitConfig.FORMATOA_SUBMITTED_ROUTING_KEY);
 
         } catch (Exception e) {
             // NO propagar excepción - el negocio debe continuar
@@ -58,12 +59,13 @@ public class ProgressEventPublisher {
             log.info("📤 Publicando FormatoAReenviadoEvent: proyectoId={}, version={}",
                     event.getProyectoId(), event.getVersion());
 
-            rabbitTemplate.convertAndSend(
+                    RabbitConfig.FORMATOA_EXCHANGE,
                     RabbitConfig.PROJECT_EVENTS_EXCHANGE,
                     RabbitConfig.FORMATOA_RESUBMITTED_ROUTING_KEY,
                     event
             );
-
+            log.info("✅ Evento publicado exitosamente a exchange: {}, routing-key: {}",
+                    RabbitConfig.FORMATOA_EXCHANGE, RabbitConfig.FORMATOA_RESUBMITTED_ROUTING_KEY);
             log.debug("✅ Evento publicado exitosamente");
 
         } catch (Exception e) {
@@ -79,12 +81,13 @@ public class ProgressEventPublisher {
         try {
             log.info("📤 Publicando AnteproyectoEnviadoEvent: proyectoId={}",
                     event.getProyectoId());
-
+                    RabbitConfig.ANTEPROYECTO_EXCHANGE,
             rabbitTemplate.convertAndSend(
                     RabbitConfig.PROJECT_EVENTS_EXCHANGE,
                     RabbitConfig.ANTEPROYECTO_SUBMITTED_ROUTING_KEY,
                     event
-            );
+            log.info("✅ Evento publicado exitosamente a exchange: {}, routing-key: {}",
+                    RabbitConfig.ANTEPROYECTO_EXCHANGE, RabbitConfig.ANTEPROYECTO_SUBMITTED_ROUTING_KEY);
 
             log.debug("✅ Evento publicado exitosamente");
 
