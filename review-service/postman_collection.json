@@ -1,0 +1,1061 @@
+{
+	"info": {
+		"_postman_id": "review-service-collection-2025",
+		"name": "Review Service - Sistema Gestión Trabajos de Grado",
+		"description": "Colección completa para el microservicio de evaluación y revisión de formatos académicos.\n\n**Servicios incluidos:**\n- Formato A: Evaluación por coordinadores\n- Anteproyectos: Asignación y evaluación por evaluadores\n\n**Configuración:**\n- Todas las peticiones van a través del API Gateway (puerto 8080)\n- Autenticación mediante Bearer tokens según rol\n- Headers X-User-Id y X-User-Role son gestionados automáticamente",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Formato A - Review",
+			"item": [
+				{
+					"name": "Listar Formatos A Pendientes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has success field\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});",
+									"",
+									"pm.test(\"Response has pagination data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('content');",
+									"    pm.expect(jsonData.data).to.have.property('totalElements');",
+									"    pm.expect(jsonData.data).to.have.property('pageNumber');",
+									"});",
+									"",
+									"// Guardar primer formatoAId si existe",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data.content.length > 0) {",
+									"    pm.environment.set(\"formato_a_id\", jsonData.data.content[0].formatoAId);",
+									"    console.log(\"FormatoA ID guardado: \" + jsonData.data.content[0].formatoAId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{coordinador_token}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "COORDINADOR",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/review/formatoA/pendientes?page=0&size=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"formatoA",
+								"pendientes"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0",
+									"description": "Número de página (base 0)"
+								},
+								{
+									"key": "size",
+									"value": "10",
+									"description": "Tamaño de página"
+								}
+							]
+						},
+						"description": "**Obtener lista de Formatos A pendientes de evaluación**\n\n**Roles permitidos:** COORDINADOR\n\n**Query params:**\n- `page`: Número de página (default: 0)\n- `size`: Elementos por página (default: 10)\n\n**Response incluye:**\n- Lista de formatos con: id, título, docente director, estudiantes, fecha de carga, estado\n- Información de paginación: totalElements, pageNumber, pageSize, totalPages"
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{coordinador_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "COORDINADOR",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/review/formatoA/pendientes?page=0&size=10",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"formatoA",
+										"pendientes"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "0"
+										},
+										{
+											"key": "size",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"content\": [\n            {\n                \"formatoAId\": 1,\n                \"titulo\": \"Sistema de gestión académica basado en microservicios\",\n                \"docenteDirectorNombre\": \"Pedro Méndez\",\n                \"docenteDirectorEmail\": \"pedro@unicauca.edu.co\",\n                \"estudiantesEmails\": [\n                    \"usuario.4@unicauca.edu.co\"\n                ],\n                \"fechaCarga\": \"2025-10-26T10:30:00\",\n                \"estado\": \"PENDIENTE\"\n            }\n        ],\n        \"totalElements\": 14,\n        \"pageNumber\": 0,\n        \"pageSize\": 10,\n        \"totalPages\": 2,\n        \"first\": true,\n        \"last\": false,\n        \"empty\": false\n    },\n    \"message\": null,\n    \"errors\": null\n}"
+						}
+					]
+				},
+				{
+					"name": "Evaluar Formato A",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Evaluation created successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('evaluado exitosamente');",
+									"});",
+									"",
+									"pm.test(\"Response has evaluation data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('evaluationId');",
+									"    pm.expect(jsonData.data).to.have.property('documentId');",
+									"    pm.expect(jsonData.data).to.have.property('documentType', 'FORMATO_A');",
+									"    pm.expect(jsonData.data).to.have.property('decision');",
+									"    pm.expect(jsonData.data).to.have.property('fechaEvaluacion');",
+									"});",
+									"",
+									"// Guardar evaluationId",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.evaluationId) {",
+									"    pm.environment.set(\"evaluation_id\", jsonData.data.evaluationId);",
+									"    console.log(\"Evaluation ID guardado: \" + jsonData.data.evaluationId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{coordinador_token}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "1",
+								"type": "text",
+								"description": "ID del coordinador evaluador"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "COORDINADOR",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"El formato cumple con todos los requisitos establecidos. Se aprueba para continuar con el proceso.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/review/formatoA/{{formato_a_id}}/evaluar",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"formatoA",
+								"{{formato_a_id}}",
+								"evaluar"
+							]
+						},
+						"description": "**Evaluar un Formato A**\n\n**Roles permitidos:** COORDINADOR\n\n**Headers requeridos:**\n- `Authorization`: Bearer token del coordinador\n- `X-User-Id`: ID del coordinador que evalúa\n- `X-User-Role`: COORDINADOR\n\n**Body params:**\n- `decision`: APROBADO | RECHAZADO\n- `observaciones`: Comentarios del evaluador (opcional)\n\n**Proceso:**\n1. Valida permisos del coordinador\n2. Obtiene información del Formato A\n3. Valida estado EN_REVISION\n4. Registra evaluación en BD\n5. Actualiza estado en submission-service\n6. Publica eventos de dominio y notificación\n7. Retorna resultado con ID de evaluación"
+					},
+					"response": [
+						{
+							"name": "Success - Aprobado",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{coordinador_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "1",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "COORDINADOR",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"El formato cumple con todos los requisitos\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/formatoA/1/evaluar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"formatoA",
+										"1",
+										"evaluar"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Formato A evaluado exitosamente\",\n    \"data\": {\n        \"evaluationId\": 123,\n        \"documentId\": 1,\n        \"documentType\": \"FORMATO_A\",\n        \"decision\": \"APROBADO\",\n        \"observaciones\": \"El formato cumple con todos los requisitos\",\n        \"fechaEvaluacion\": \"2025-10-26T14:30:00\",\n        \"notificacionEnviada\": true\n    },\n    \"errors\": null\n}"
+						},
+						{
+							"name": "Success - Rechazado",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{coordinador_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "1",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "COORDINADOR",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"decision\": \"RECHAZADO\",\n  \"observaciones\": \"El formato presenta inconsistencias en la metodología propuesta. Se requiere mayor claridad en los objetivos específicos.\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/formatoA/1/evaluar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"formatoA",
+										"1",
+										"evaluar"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Formato A evaluado exitosamente\",\n    \"data\": {\n        \"evaluationId\": 124,\n        \"documentId\": 1,\n        \"documentType\": \"FORMATO_A\",\n        \"decision\": \"RECHAZADO\",\n        \"observaciones\": \"El formato presenta inconsistencias en la metodología propuesta. Se requiere mayor claridad en los objetivos específicos.\",\n        \"fechaEvaluacion\": \"2025-10-26T14:35:00\",\n        \"notificacionEnviada\": true\n    },\n    \"errors\": null\n}"
+						},
+						{
+							"name": "Error - Estado Inválido",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{coordinador_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "1",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "COORDINADOR",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"Aprobado\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/formatoA/1/evaluar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"formatoA",
+										"1",
+										"evaluar"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": false,\n    \"message\": null,\n    \"data\": null,\n    \"errors\": \"Formato A no está en estado evaluable. Estado actual: FORMATO_A_DILIGENCIADO. Se requiere: EN_REVISION\"\n}"
+						},
+						{
+							"name": "Error - Rol No Autorizado",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{docente_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "2",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "DOCENTE",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"Aprobado\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/formatoA/1/evaluar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"formatoA",
+										"1",
+										"evaluar"
+									]
+								}
+							},
+							"status": "Forbidden",
+							"code": 403,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": false,\n    \"message\": null,\n    \"data\": null,\n    \"errors\": \"Solo coordinadores pueden evaluar Formato A\"\n}"
+						}
+					]
+				}
+			],
+			"description": "Endpoints para evaluación de Formato A por coordinadores"
+		},
+		{
+			"name": "Anteproyectos - Review",
+			"item": [
+				{
+					"name": "Asignar Evaluadores",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Assignment created successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('asignados exitosamente');",
+									"});",
+									"",
+									"pm.test(\"Response has assignment data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('asignacionId');",
+									"    pm.expect(jsonData.data).to.have.property('anteproyectoId');",
+									"    pm.expect(jsonData.data).to.have.property('evaluador1');",
+									"    pm.expect(jsonData.data).to.have.property('evaluador2');",
+									"    pm.expect(jsonData.data).to.have.property('estado', 'PENDIENTE');",
+									"});",
+									"",
+									"// Guardar asignacionId",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.asignacionId) {",
+									"    pm.environment.set(\"asignacion_id\", jsonData.data.asignacionId);",
+									"    console.log(\"Asignacion ID guardado: \" + jsonData.data.asignacionId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jefe_token}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "10",
+								"type": "text",
+								"description": "ID del jefe de departamento"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "JEFE_DEPARTAMENTO",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"anteproyectoId\": 5,\n  \"evaluador1Id\": 15,\n  \"evaluador2Id\": 20\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/review/anteproyectos/asignar",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"anteproyectos",
+								"asignar"
+							]
+						},
+						"description": "**Asignar dos evaluadores a un anteproyecto**\n\n**Roles permitidos:** JEFE_DEPARTAMENTO\n\n**Body params:**\n- `anteproyectoId`: ID del anteproyecto a asignar\n- `evaluador1Id`: ID del primer evaluador\n- `evaluador2Id`: ID del segundo evaluador\n\n**Validaciones:**\n- Los evaluadores no pueden ser la misma persona\n- El anteproyecto debe existir en submission-service\n- No puede haber asignación previa activa"
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{jefe_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "10",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "JEFE_DEPARTAMENTO",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"anteproyectoId\": 5,\n  \"evaluador1Id\": 15,\n  \"evaluador2Id\": 20\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/anteproyectos/asignar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"anteproyectos",
+										"asignar"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Evaluadores asignados exitosamente\",\n    \"data\": {\n        \"asignacionId\": 1,\n        \"anteproyectoId\": 5,\n        \"tituloAnteproyecto\": \"Sistema de recomendación basado en ML\",\n        \"evaluador1\": {\n            \"id\": 15,\n            \"nombre\": \"Evaluador 15\",\n            \"email\": \"evaluador15@unicauca.edu.co\",\n            \"decision\": null,\n            \"observaciones\": null\n        },\n        \"evaluador2\": {\n            \"id\": 20,\n            \"nombre\": \"Evaluador 20\",\n            \"email\": \"evaluador20@unicauca.edu.co\",\n            \"decision\": null,\n            \"observaciones\": null\n        },\n        \"estado\": \"PENDIENTE\",\n        \"fechaAsignacion\": \"2025-10-26T15:00:00\",\n        \"fechaCompletado\": null,\n        \"finalDecision\": null\n    },\n    \"errors\": null\n}"
+						}
+					]
+				},
+				{
+					"name": "Listar Asignaciones (Jefe)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has success field\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});",
+									"",
+									"pm.test(\"Response has pagination data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('content');",
+									"    pm.expect(jsonData.data).to.have.property('totalElements');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jefe_token}}",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "10",
+								"type": "text"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "JEFE_DEPARTAMENTO",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/review/anteproyectos/asignaciones?estado=PENDIENTE&page=0&size=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"anteproyectos",
+								"asignaciones"
+							],
+							"query": [
+								{
+									"key": "estado",
+									"value": "PENDIENTE",
+									"description": "PENDIENTE | COMPLETADO (opcional)"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "**Listar todas las asignaciones de anteproyectos**\n\n**Roles permitidos:** JEFE_DEPARTAMENTO (ve todas las asignaciones)\n\n**Query params:**\n- `estado`: Filtrar por PENDIENTE o COMPLETADO (opcional)\n- `page`: Número de página\n- `size`: Elementos por página"
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Asignaciones (Evaluador)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has success field\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{docente_token}}",
+								"type": "text",
+								"description": "Token de evaluador"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "15",
+								"type": "text",
+								"description": "ID del evaluador"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EVALUADOR",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/review/anteproyectos/asignaciones?estado=PENDIENTE&page=0&size=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"anteproyectos",
+								"asignaciones"
+							],
+							"query": [
+								{
+									"key": "estado",
+									"value": "PENDIENTE"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "**Listar asignaciones del evaluador autenticado**\n\n**Roles permitidos:** EVALUADOR (solo ve sus propias asignaciones)\n\n**Query params:**\n- `estado`: Filtrar por PENDIENTE o COMPLETADO (opcional)\n- `page`: Número de página\n- `size`: Elementos por página"
+					},
+					"response": [
+						{
+							"name": "Success Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{docente_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "15",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "EVALUADOR",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/review/anteproyectos/asignaciones?estado=PENDIENTE&page=0&size=10",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"anteproyectos",
+										"asignaciones"
+									],
+									"query": [
+										{
+											"key": "estado",
+											"value": "PENDIENTE"
+										},
+										{
+											"key": "page",
+											"value": "0"
+										},
+										{
+											"key": "size",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"data\": {\n        \"content\": [\n            {\n                \"asignacionId\": 1,\n                \"anteproyectoId\": 5,\n                \"tituloAnteproyecto\": \"Sistema de recomendación basado en ML\",\n                \"evaluador1\": {\n                    \"id\": 15,\n                    \"nombre\": \"Evaluador 15\",\n                    \"email\": \"evaluador15@unicauca.edu.co\",\n                    \"decision\": null,\n                    \"observaciones\": null\n                },\n                \"evaluador2\": {\n                    \"id\": 20,\n                    \"nombre\": \"Evaluador 20\",\n                    \"email\": \"evaluador20@unicauca.edu.co\",\n                    \"decision\": null,\n                    \"observaciones\": null\n                },\n                \"estado\": \"PENDIENTE\"\n            }\n        ],\n        \"totalElements\": 1\n    },\n    \"message\": null,\n    \"errors\": null\n}"
+						}
+					]
+				},
+				{
+					"name": "Evaluar Anteproyecto",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Evaluation created successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('registrada exitosamente');",
+									"});",
+									"",
+									"pm.test(\"Response has evaluation data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('evaluationId');",
+									"    pm.expect(jsonData.data).to.have.property('documentType', 'ANTEPROYECTO');",
+									"    pm.expect(jsonData.data).to.have.property('decision');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{docente_token}}",
+								"type": "text",
+								"description": "Token de evaluador"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "15",
+								"type": "text",
+								"description": "ID del evaluador"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EVALUADOR",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"El anteproyecto presenta una metodología sólida y objetivos claramente definidos. Los recursos propuestos son adecuados.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/review/anteproyectos/5/evaluar",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"anteproyectos",
+								"5",
+								"evaluar"
+							]
+						},
+						"description": "**Evaluar un anteproyecto asignado**\n\n**Roles permitidos:** EVALUADOR\n\n**Headers requeridos:**\n- `Authorization`: Bearer token del evaluador\n- `X-User-Id`: ID del evaluador\n- `X-User-Role`: EVALUADOR\n\n**Body params:**\n- `decision`: APROBADO | RECHAZADO\n- `observaciones`: Comentarios del evaluador\n\n**Lógica:**\n- Si es la primera evaluación: se guarda y se espera al segundo evaluador (notificacionEnviada: false)\n- Si es la segunda evaluación: se calcula decisión final, se actualiza submission-service y se notifica (notificacionEnviada: true)"
+					},
+					"response": [
+						{
+							"name": "Success - Primera Evaluación",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{docente_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "15",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "EVALUADOR",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"El anteproyecto presenta una metodología sólida\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/anteproyectos/5/evaluar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"anteproyectos",
+										"5",
+										"evaluar"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Evaluación registrada exitosamente\",\n    \"data\": {\n        \"evaluationId\": 124,\n        \"documentId\": 5,\n        \"documentType\": \"ANTEPROYECTO\",\n        \"decision\": \"APROBADO\",\n        \"observaciones\": \"El anteproyecto presenta una metodología sólida\",\n        \"fechaEvaluacion\": \"2025-10-26T16:00:00\",\n        \"notificacionEnviada\": false\n    },\n    \"errors\": null\n}"
+						},
+						{
+							"name": "Success - Segunda Evaluación",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{docente_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Id",
+										"value": "20",
+										"type": "text"
+									},
+									{
+										"key": "X-User-Role",
+										"value": "EVALUADOR",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"decision\": \"APROBADO\",\n  \"observaciones\": \"Coincido con la evaluación previa. Proyecto viable.\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/review/anteproyectos/5/evaluar",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"review",
+										"anteproyectos",
+										"5",
+										"evaluar"
+									]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Evaluación registrada exitosamente\",\n    \"data\": {\n        \"evaluationId\": 125,\n        \"documentId\": 5,\n        \"documentType\": \"ANTEPROYECTO\",\n        \"decision\": \"APROBADO\",\n        \"observaciones\": \"Coincido con la evaluación previa. Proyecto viable.\",\n        \"fechaEvaluacion\": \"2025-10-26T16:15:00\",\n        \"notificacionEnviada\": true\n    },\n    \"errors\": null\n}"
+						}
+					]
+				}
+			],
+			"description": "Endpoints para asignación y evaluación de anteproyectos"
+		},
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Review Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/review/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"review",
+								"health"
+							]
+						},
+						"description": "Verificar estado del review-service"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "formato_a_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "anteproyecto_id",
+			"value": "5",
+			"type": "string"
+		},
+		{
+			"key": "asignacion_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "evaluation_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

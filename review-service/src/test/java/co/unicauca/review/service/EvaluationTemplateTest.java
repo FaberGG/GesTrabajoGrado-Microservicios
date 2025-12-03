@@ -225,7 +225,7 @@ class EvaluationTemplateTest {
         }
 
         @Override
-        protected void updateSubmissionService(Long docId, Decision decision, String obs) {
+        protected void updateSubmissionService(Long docId, Decision decision, String obs, Integer evaluatorId) {
             updateSubmissionCalled = true;
             // Mock implementation - no actual HTTP call
         }
@@ -247,4 +247,3 @@ class EvaluationTemplateTest {
         }
     }
 }
-

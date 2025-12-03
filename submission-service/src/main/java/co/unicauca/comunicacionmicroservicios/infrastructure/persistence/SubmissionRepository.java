@@ -1,6 +1,8 @@
 package co.unicauca.comunicacionmicroservicios.infrastructure.persistence;
 
 import co.unicauca.comunicacionmicroservicios.domain.model.ProyectoSubmission;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -38,5 +40,10 @@ public interface SubmissionRepository extends JpaRepository<ProyectoSubmission, 
      * Contar proyectos por estado
      */
     Long countByEstadoNombre(String estadoNombre);
-}
 
+    /**
+     * Buscar Formatos A pendientes de evaluación (estado FORMATO_A_DILIGENCIADO, PRESENTADO_AL_COORDINADOR o EN_EVALUACION_COMITE)
+     */
+    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre IN ('FORMATO_A_DILIGENCIADO', 'PRESENTADO_AL_COORDINADOR', 'EN_EVALUACION_COMITE') ORDER BY p.fechaCreacion ASC")
+    Page<ProyectoSubmission> findFormatosAPendientes(Pageable pageable);
+}

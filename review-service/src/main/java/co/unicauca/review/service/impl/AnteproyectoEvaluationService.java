@@ -85,7 +85,7 @@ public class AnteproyectoEvaluationService extends EvaluationTemplate {
     }
 
     @Override
-    protected void updateSubmissionService(Long docId, Decision decision, String obs) {
+    protected void updateSubmissionService(Long docId, Decision decision, String obs, Integer evaluatorId) {
         AsignacionEvaluadores asignacion = asignacionRepository
             .findByAnteproyectoId(docId)
             .orElseThrow(() -> new IllegalStateException("Asignación no encontrada"));
@@ -114,9 +114,10 @@ public class AnteproyectoEvaluationService extends EvaluationTemplate {
             asignacion.setEstado(AsignacionEstado.COMPLETADA);
             asignacion.setFechaCompletado(LocalDateTime.now());
 
-            Map<String, String> body = Map.of(
+            Map<String, Object> body = Map.of(
                 "estado", finalDecision.name(),
-                "observaciones", "Evaluado por ambos evaluadores"
+                "observaciones", "Evaluado por ambos evaluadores",
+                "evaluadoPor", evaluatorId
             );
 
             submissionClient.updateAnteproyectoEstado(docId, body);
@@ -223,4 +224,3 @@ public class AnteproyectoEvaluationService extends EvaluationTemplate {
         return recipients;
     }
 }
-

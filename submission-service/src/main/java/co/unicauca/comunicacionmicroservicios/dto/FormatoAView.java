@@ -2,11 +2,13 @@ package co.unicauca.comunicacionmicroservicios.dto;
 
 import co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Vista simple de una versión de Formato A. */
 public class FormatoAView {
     private Long id;
     private Long proyectoId;
+    private String titulo;                    // título del proyecto
     private Integer version;                  // número de intento
     private enumEstadoFormato estado;         // PENDIENTE/APROBADO/RECHAZADO
     private String observaciones;             // si ya fue evaluado
@@ -14,6 +16,9 @@ public class FormatoAView {
     private String pdfUrl;                    // URL o path (si expones)
     private String cartaUrl;                  // si aplica
     private LocalDateTime fechaEnvio;
+    private String docenteDirectorNombre;     // nombre completo del director
+    private String docenteDirectorEmail;      // email del director
+    private List<String> estudiantesEmails;   // lista de emails de estudiantes
 
     // getters/setters
     public Long getId() { return id; }
@@ -21,6 +26,9 @@ public class FormatoAView {
 
     public Long getProyectoId() { return proyectoId; }
     public void setProyectoId(Long proyectoId) { this.proyectoId = proyectoId; }
+
+    public String getTitulo() { return titulo; }
+    public void setTitulo(String titulo) { this.titulo = titulo; }
 
     public Integer getVersion() { return version; }
     public void setVersion(Integer version) { this.version = version; }
@@ -42,4 +50,13 @@ public class FormatoAView {
 
     public LocalDateTime getFechaEnvio() { return fechaEnvio; }
     public void setFechaEnvio(LocalDateTime fechaEnvio) { this.fechaEnvio = fechaEnvio; }
+
+    public String getDocenteDirectorNombre() { return docenteDirectorNombre; }
+    public void setDocenteDirectorNombre(String docenteDirectorNombre) { this.docenteDirectorNombre = docenteDirectorNombre; }
+
+    public String getDocenteDirectorEmail() { return docenteDirectorEmail; }
+    public void setDocenteDirectorEmail(String docenteDirectorEmail) { this.docenteDirectorEmail = docenteDirectorEmail; }
+
+    public List<String> getEstudiantesEmails() { return estudiantesEmails; }
+    public void setEstudiantesEmails(List<String> estudiantesEmails) { this.estudiantesEmails = estudiantesEmails; }
 }

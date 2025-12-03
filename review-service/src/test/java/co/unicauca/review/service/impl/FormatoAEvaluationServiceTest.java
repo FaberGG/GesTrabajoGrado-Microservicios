@@ -1,6 +1,7 @@
 package co.unicauca.review.service.impl;
 
 import co.unicauca.review.client.SubmissionServiceClient;
+import co.unicauca.review.dto.EvaluacionRequest;
 import co.unicauca.review.dto.request.EvaluationRequestDTO;
 import co.unicauca.review.dto.response.EvaluationResultDTO;
 import co.unicauca.review.entity.Evaluation;
@@ -74,7 +75,7 @@ class FormatoAEvaluationServiceTest {
 
         when(submissionClient.getFormatoA(formatoAId)).thenReturn(formatoADTO);
         when(evaluationRepository.save(any(Evaluation.class))).thenReturn(savedEval);
-        doNothing().when(submissionClient).updateFormatoAEstado(anyLong(), anyMap());
+        doNothing().when(submissionClient).updateFormatoAEstado(anyLong(), any(EvaluacionRequest.class));
         doNothing().when(rabbitTemplate).convertAndSend(anyString(), anyString(), any(Object.class));
 
         // When
@@ -88,7 +89,7 @@ class FormatoAEvaluationServiceTest {
         assertTrue(result.notificacionEnviada());
 
         verify(submissionClient).getFormatoA(formatoAId);
-        verify(submissionClient).updateFormatoAEstado(eq(formatoAId), anyMap());
+        verify(submissionClient).updateFormatoAEstado(eq(formatoAId), any(EvaluacionRequest.class));
         verify(rabbitTemplate).convertAndSend(anyString(), anyString(), any(Object.class));
     }
 

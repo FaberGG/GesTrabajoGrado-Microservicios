@@ -10,8 +10,10 @@ El sistema está compuesto por los siguientes servicios:
 - **Identity Service** (Puerto 8081): Gestión de usuarios y autenticación JWT
 - **Submission Service** (Puerto 8082): Gestión de entregas y documentos
 - **Notification Service** (Puerto 8083): Envío de notificaciones y emails
+- **Review Service** (Puerto 8084): Evaluación de Formato A y Anteproyectos
+- **Progress Tracking Service** (Puerto 8085): Seguimiento del estado de proyectos
 - **RabbitMQ** (Puertos 5672, 15672): Message broker para comunicación asíncrona
-- **PostgreSQL**: 3 bases de datos independientes (puertos 5432, 5433, 5434)
+- **PostgreSQL**: Bases de datos independientes para cada servicio
 
 ## 🚀 Inicio Rápido con Docker Compose
 
@@ -20,7 +22,7 @@ El sistema está compuesto por los siguientes servicios:
 - Docker Desktop instalado
 - Docker Compose (incluido en Docker Desktop)
 - Al menos 4GB de RAM disponible
-- Puertos 8080-8083, 5432-5434, 5672, 15672 disponibles
+- Puertos 8080-8085, 5432-5434, 5672, 15672 disponibles
 
 ### Pasos para Iniciar
 
@@ -54,6 +56,8 @@ El sistema está compuesto por los siguientes servicios:
    docker-compose logs -f identity
    docker-compose logs -f submission
    docker-compose logs -f notification
+   docker-compose logs -f review
+   docker-compose logs -f progress-tracking
    ```
 
 ### Detener los Servicios
@@ -75,6 +79,8 @@ docker-compose down -v
 | Identity | 8081 | 8081 | http://localhost:8081 |
 | Submission | 8082 | 8082 | http://localhost:8082 |
 | Notification | 8083 | 8083 | http://localhost:8083 |
+| Review | 8084 | 8084 | http://localhost:8084 |
+| Progress Tracking | 8085 | 8085 | http://localhost:8085 |
 
 ### Infraestructura
 | Servicio | Puerto Interno | Puerto Externo | Descripción |
@@ -84,6 +90,8 @@ docker-compose down -v
 | PostgreSQL Identity | 5432 | 5432 | Base de datos Identity |
 | PostgreSQL Submission | 5432 | 5433 | Base de datos Submission |
 | PostgreSQL Notification | 5432 | 5434 | Base de datos Notification |
+| PostgreSQL Review | 5432 | 5435 | Base de datos Review |
+| PostgreSQL Progress Tracking | 5432 | 5436 | Base de datos Progress Tracking |
 
 ## 🔐 Variables de Entorno Requeridas
 
@@ -107,6 +115,12 @@ SUBMISSION_DB_PASS=submission_password
 NOTIFICATION_DB_USER=notification_user
 NOTIFICATION_DB_PASS=notification_password
 
+REVIEW_DB_USER=review_user
+REVIEW_DB_PASS=review_password
+
+PROGRESS_TRACKING_DB_USER=progress_user
+PROGRESS_TRACKING_DB_PASS=progress_password
+
 # SMTP - Configuración para envío de emails
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
@@ -123,6 +137,8 @@ Todos los servicios exponen endpoints de health check:
 - Identity: http://localhost:8081/actuator/health
 - Submission: http://localhost:8082/actuator/health
 - Notification: http://localhost:8083/actuator/health
+- Review: http://localhost:8084/actuator/health
+- Progress Tracking: http://localhost:8085/actuator/health
 - RabbitMQ: http://localhost:15672 (usuario/contraseña desde .env)
 
 ## 📊 Monitoreo
@@ -196,6 +212,8 @@ Cada microservicio tiene su propio `docker-compose.yml` para desarrollo aislado:
 - `identity-service/docker-compose.yml`
 - `submission-service/docker-compose.yml`
 - `notification-service/docker-compose.yml`
+- `review-service/docker-compose.yml`
+- `progress-tracking-service/docker-compose.yml`
 
 ### Modo Producción (docker-compose raíz)
 El `docker-compose.yaml` en la raíz inicia **todo el sistema completo** con:
@@ -225,7 +243,15 @@ GesTrabajoGrado-Microservicios/
 │   ├── Dockerfile
 │   ├── docker-compose.yml       # Para desarrollo individual
 │   └── src/
-└── notification-service/
+├── notification-service/
+│   ├── Dockerfile
+│   ├── docker-compose.yml       # Para desarrollo individual
+│   └── src/
+├── review-service/
+│   ├── Dockerfile
+│   ├── docker-compose.yml       # Para desarrollo individual
+│   └── src/
+└── progress-tracking-service/
     ├── Dockerfile
     ├── docker-compose.yml       # Para desarrollo individual
     └── src/
@@ -253,6 +279,8 @@ GesTrabajoGrado-Microservicios/
 - Auth: `POST http://localhost:8080/api/identity/auth/login`
 - Submissions: `http://localhost:8080/api/submissions/*`
 - Notifications: `http://localhost:8080/api/notifications/*`
+- Reviews: `http://localhost:8080/api/reviews/*`
+- Progress Tracking: `http://localhost:8080/api/progress-tracking/*`
 
 ## 🔒 Seguridad
 
@@ -276,4 +304,4 @@ GesTrabajoGrado-Microservicios/
 **Fecha**: Octubre 2025  
 **Versión**: 1.0.0
 
-"# MicroservicioSubmission" 
+"# MicroservicioSubmission"

@@ -67,7 +67,7 @@ public abstract class EvaluationTemplate {
 
             // 5. Actualizar Submission Service (específico - abstracto)
             updateSubmissionService(document.getId(), request.decision(),
-                                   request.observaciones());
+                                   request.observaciones(), request.evaluatorId().intValue());
 
             // 6. Publicar evento notificación (específico - abstracto)
             boolean notified = publishNotificationEvent(evaluation, document);
@@ -152,7 +152,7 @@ public abstract class EvaluationTemplate {
     /**
      * Actualiza el estado del documento en el servicio de submissions
      */
-    protected abstract void updateSubmissionService(Long docId, Decision decision, String obs);
+    protected abstract void updateSubmissionService(Long docId, Decision decision, String obs, Integer evaluatorId);
 
     /**
      * Publica un evento de notificación vía RabbitMQ
@@ -203,4 +203,3 @@ public abstract class EvaluationTemplate {
         public void setAutoresEmails(List<String> emails) { this.autoresEmails = emails; }
     }
 }
-
