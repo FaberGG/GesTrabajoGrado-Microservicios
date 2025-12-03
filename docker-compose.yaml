@@ -232,6 +232,7 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=${RABBITMQ_USER}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+      - SUBMISSION_URL=http://submission:8082
     depends_on:
       rabbitmq:
         condition: service_healthy

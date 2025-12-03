@@ -11,6 +11,7 @@ public interface ISubmissionService {
     IdResponse crearFormatoA(String userId, FormatoAData data, MultipartFile pdf, MultipartFile carta);
     FormatoAView obtenerFormatoA(Long id);
     FormatoAPage listarFormatoA(Optional<String> docenteId, int page, int size);
+    FormatoAPage listarFormatosAPendientes(int page, int size);
     IdResponse reenviarFormatoA(String userId, Long proyectoId, MultipartFile pdf, MultipartFile carta);
     void cambiarEstadoFormatoA(Long versionId, EvaluacionRequest req);
 

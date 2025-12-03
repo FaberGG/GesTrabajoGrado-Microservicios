@@ -302,6 +302,94 @@ public class SubmissionService implements ISubmissionService {
     }
 
     @Override
+    public FormatoAPage listarFormatosAPendientes(int page, int size) {
+        log.info("📋 Listando Formatos A pendientes - page: {}, size: {}", page, size);
+
+        // Crear objeto Pageable para paginación
+        org.springframework.data.domain.Pageable pageable =
+            org.springframework.data.domain.PageRequest.of(page, size);
+
+        // Obtener proyectos pendientes desde el repositorio
+        org.springframework.data.domain.Page<ProyectoSubmission> proyectos =
+            submissionRepository.findFormatosAPendientes(pageable);
+
+        // Convertir entidades a DTOs
+        List<FormatoAView> formatosView = proyectos.getContent().stream()
+            .map(this::convertirProyectoAFormatoAView)
+            .collect(Collectors.toList());
+
+        // Construir respuesta paginada
+        FormatoAPage response = new FormatoAPage();
+        response.setContent(formatosView);
+        response.setPage(proyectos.getNumber());
+        response.setSize(proyectos.getSize());
+        response.setTotalElements(proyectos.getTotalElements());
+
+        log.info("✅ Se encontraron {} Formatos A pendientes", formatosView.size());
+        return response;
+    }
+
+    private FormatoAView convertirProyectoAFormatoAView(ProyectoSubmission proyecto) {
+        FormatoAView view = new FormatoAView();
+        view.setId(proyecto.getId());
+        view.setProyectoId(proyecto.getId());
+        view.setTitulo(proyecto.getTitulo());
+        view.setVersion(proyecto.getNumeroIntentos());
+
+        // Mapear estado del proyecto a estado del formato - SIEMPRE establecer un estado
+        if ("FORMATO_A_DILIGENCIADO".equals(proyecto.getEstadoNombre()) ||
+            "PRESENTADO_AL_COORDINADOR".equals(proyecto.getEstadoNombre()) ||
+            "EN_EVALUACION_COMITE".equals(proyecto.getEstadoNombre())) {
+            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.PENDIENTE);
+        } else if ("ACEPTADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
+            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.APROBADO);
+        } else if ("RECHAZADO_POR_COMITE".equals(proyecto.getEstadoNombre()) ||
+                   "CORRECCIONES_COMITE".equals(proyecto.getEstadoNombre())) {
+            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.RECHAZADO);
+        } else {
+            // Valor por defecto
+            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.PENDIENTE);
+        }
+
+        view.setObservaciones(proyecto.getComentariosComite());
+        view.setPdfUrl(proyecto.getRutaFormatoA());
+        view.setCartaUrl(proyecto.getRutaCarta());
+        view.setFechaEnvio(proyecto.getFechaCreacion());
+
+        // Extraer nombre del archivo de la ruta
+        if (proyecto.getRutaFormatoA() != null) {
+            String[] partes = proyecto.getRutaFormatoA().split("/");
+            view.setNombreArchivo(partes[partes.length - 1]);
+        }
+
+        // Obtener información del docente director desde Identity Service
+        try {
+            IdentityClient.UserBasicInfo directorInfo = identityClient.getUserById(proyecto.getDocenteDirectorId());
+            view.setDocenteDirectorNombre(directorInfo.getNombreCompleto());
+            view.setDocenteDirectorEmail(directorInfo.email());
+        } catch (Exception e) {
+            log.warn("No se pudo obtener información del director {}: {}", proyecto.getDocenteDirectorId(), e.getMessage());
+            view.setDocenteDirectorNombre("Director ID: " + proyecto.getDocenteDirectorId());
+            view.setDocenteDirectorEmail("director." + proyecto.getDocenteDirectorId() + "@unicauca.edu.co");
+        }
+
+        // Obtener información del estudiante desde Identity Service
+        List<String> estudiantesEmails = new java.util.ArrayList<>();
+        if (proyecto.getEstudianteId() != null) {
+            try {
+                IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(proyecto.getEstudianteId());
+                estudiantesEmails.add(estudianteInfo.email());
+            } catch (Exception e) {
+                log.warn("No se pudo obtener información del estudiante {}: {}", proyecto.getEstudianteId(), e.getMessage());
+                estudiantesEmails.add("estudiante." + proyecto.getEstudianteId() + "@unicauca.edu.co");
+            }
+        }
+        view.setEstudiantesEmails(estudiantesEmails);
+
+        return view;
+    }
+
+    @Override
     public IdResponse reenviarFormatoA(String userId, Long proyectoId, MultipartFile pdf, MultipartFile carta) {
         log.info("🔄 Reenviando Formato A - Proyecto: {}, Usuario: {}", proyectoId, userId);
 

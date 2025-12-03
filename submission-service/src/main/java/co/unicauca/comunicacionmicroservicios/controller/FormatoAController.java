@@ -76,6 +76,18 @@ public class FormatoAController {
     }
 
     /**
+     * Lista Formato A pendientes de evaluación (para el Review Service).
+     * Estados: PRESENTADO_AL_COORDINADOR, EN_EVALUACION_COMITE
+     */
+    @GetMapping(path = "/pendientes", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<FormatoAPage> listarFormatosAPendientes(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(service.listarFormatosAPendientes(page, size));
+    }
+
+    /**
      * RF4 — Subir nueva versión de Formato A tras un rechazo.
      *
      * Reglas:

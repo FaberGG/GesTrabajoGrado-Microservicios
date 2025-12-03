@@ -1,10 +1,12 @@
 package co.unicauca.review.controller;
 
 import co.unicauca.review.client.SubmissionServiceClient;
+import co.unicauca.review.dto.request.EvaluateFormatoARequestDTO;
 import co.unicauca.review.dto.request.EvaluationRequestDTO;
 import co.unicauca.review.dto.response.ApiResponse;
 import co.unicauca.review.dto.response.EvaluationResultDTO;
 import co.unicauca.review.dto.response.FormatoAReviewDTO;
+import co.unicauca.review.dto.response.PageResponse;
 import co.unicauca.review.enums.EvaluatorRole;
 import co.unicauca.review.exception.InvalidStateException;
 import co.unicauca.review.exception.UnauthorizedException;
@@ -34,7 +36,7 @@ public class FormatoAReviewController {
     }
 
     @GetMapping("/pendientes")
-    public ResponseEntity<ApiResponse<Page<FormatoAReviewDTO>>> getPendientes(
+    public ResponseEntity<ApiResponse<PageResponse<FormatoAReviewDTO>>> getPendientes(
             @RequestHeader("X-User-Role") String userRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
@@ -48,10 +50,13 @@ public class FormatoAReviewController {
 
         try {
             // Obtener de Submission Service
-            Page<FormatoAReviewDTO> formatosA =
+            Page<FormatoAReviewDTO> formatosAPage =
                 submissionClient.getFormatosAPendientes(page, size);
 
-            return ResponseEntity.ok(ApiResponse.success(formatosA));
+            // Convertir a PageResponse con estructura personalizada
+            PageResponse<FormatoAReviewDTO> pageResponse = PageResponse.from(formatosAPage);
+
+            return ResponseEntity.ok(ApiResponse.success(pageResponse));
 
         } catch (Exception e) {
             log.error("Error obteniendo Formato A pendientes: {}", e.getMessage());
@@ -63,11 +68,12 @@ public class FormatoAReviewController {
     @PostMapping("/{id}/evaluar")
     public ResponseEntity<ApiResponse<EvaluationResultDTO>> evaluar(
             @PathVariable Long id,
-            @Valid @RequestBody EvaluationRequestDTO request,
+            @Valid @RequestBody EvaluateFormatoARequestDTO request,
             @RequestHeader("X-User-Id") Long userId,
             @RequestHeader("X-User-Role") String userRole) {
 
-        log.info("Evaluando Formato A: id={}, userId={}, role={}", id, userId, userRole);
+        log.info("Evaluando Formato A: id={}, userId={}, role={}, decision={}",
+                id, userId, userRole, request.decision());
 
         if (!"COORDINADOR".equals(userRole)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -75,13 +81,13 @@ public class FormatoAReviewController {
         }
 
         try {
-            // Crear request completo con datos del header
+            // Crear request completo con datos del path, headers y body
             EvaluationRequestDTO fullRequest = new EvaluationRequestDTO(
-                id,
-                request.decision(),
-                request.observaciones(),
-                userId,
-                EvaluatorRole.COORDINADOR
+                id,                         // documentId viene del path
+                request.decision(),          // decision viene del body
+                request.observaciones(),     // observaciones viene del body
+                userId,                      // evaluatorId viene del header
+                EvaluatorRole.COORDINADOR    // evaluatorRole según validación
             );
 
             EvaluationResultDTO result = evaluationService.evaluate(fullRequest);
@@ -106,4 +112,3 @@ public class FormatoAReviewController {
         }
     }
 }
-
