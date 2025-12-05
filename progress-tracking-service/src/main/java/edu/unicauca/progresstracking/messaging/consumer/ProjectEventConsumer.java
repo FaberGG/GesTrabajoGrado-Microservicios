@@ -110,38 +110,70 @@ public class ProjectEventConsumer {
 
     /**
      * Consumir evento: anteproyecto.enviado
+     * Incluye toda la información del proyecto
      */
     @RabbitListener(queues = "progress.anteproyecto.queue")
     public void onAnteproyectoEvent(@Payload Map<String, Object> payload) {
         try {
             log.info("📥 [ANTEPROYECTO] Evento recibido: {}", payload);
 
+            // Extraer datos COMPLETOS del payload
             Long proyectoId = extractLong(payload, "proyectoId");
             String titulo = (String) payload.getOrDefault("titulo", "Sin título");
+            String modalidad = (String) payload.get("modalidad");
+            String programa = (String) payload.get("programa");
+
+            // Director
+            Long directorId = extractLong(payload, "directorId");
+            String directorNombre = (String) payload.get("directorNombre");
+
+            // Co-director (opcional)
+            Long codirectorId = extractLong(payload, "codirectorId");
+            String codirectorNombre = (String) payload.get("codirectorNombre");
+
+            // Estudiantes
+            Long estudiante1Id = extractLong(payload, "estudiante1Id");
+            String estudiante1Nombre = (String) payload.get("estudiante1Nombre");
+            Long estudiante2Id = extractLong(payload, "estudiante2Id");
+            String estudiante2Nombre = (String) payload.get("estudiante2Nombre");
+
             String timestamp = (String) payload.get("timestamp");
 
-            // Guardar en historial
+            // Guardar en historial (Event Store)
             HistorialEvento historial = HistorialEvento.builder()
                     .proyectoId(proyectoId)
                     .tipoEvento("ANTEPROYECTO_ENVIADO")
                     .fecha(parseTimestamp(timestamp))
-                    .descripcion("Anteproyecto enviado: " + titulo)
+                    .descripcion(String.format("Anteproyecto enviado: %s", titulo))
                     .metadata(serializeToJson(payload))
                     .build();
 
             historialRepository.save(historial);
+            log.debug("✅ Evento guardado en historial: ID={}", historial.getEventoId());
 
-            // Actualizar estado
-            projectStateService.actualizarEstadoAnteproyecto(
+            // Actualizar vista materializada con toda la información
+            projectStateService.actualizarEstadoAnteproyectoCompleto(
                     proyectoId,
+                    titulo,
+                    modalidad,
+                    programa,
                     "ANTEPROYECTO_ENVIADO",
-                    payload
+                    directorId,
+                    directorNombre,
+                    codirectorId,
+                    codirectorNombre,
+                    estudiante1Id,
+                    estudiante1Nombre,
+                    estudiante2Id,
+                    estudiante2Nombre
             );
 
-            log.info("✅ [ANTEPROYECTO] Proyecto {} actualizado a: ANTEPROYECTO_ENVIADO", proyectoId);
+            log.info("✅ [ANTEPROYECTO] Proyecto {} actualizado a: ANTEPROYECTO_ENVIADO - Modalidad: {}, Estudiantes: [{}, {}]",
+                    proyectoId, modalidad, estudiante1Nombre, estudiante2Nombre);
 
         } catch (Exception e) {
             log.error("❌ Error procesando evento Anteproyecto: {}", e.getMessage(), e);
+            // TODO: Enviar a DLQ (Dead Letter Queue) en producción
         }
     }
 

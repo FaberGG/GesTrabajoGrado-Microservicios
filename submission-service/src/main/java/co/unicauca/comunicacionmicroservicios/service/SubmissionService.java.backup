@@ -1,4 +1,4 @@
-package co.unicauca.comunicacionmicroservicios.service;
+﻿package co.unicauca.comunicacionmicroservicios.service;
 
 import co.unicauca.comunicacionmicroservicios.domain.model.ProyectoSubmission;
 import co.unicauca.comunicacionmicroservicios.domain.model.ProyectoGrado;
@@ -31,7 +31,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Servicio para gestionar las submissions con patrón State
+ * Servicio para gestionar las submissions con patrÃ³n State
  */
 @Service
 @Transactional
@@ -54,6 +54,7 @@ public class SubmissionService implements ISubmissionService {
     @Autowired
     private NotificationPublisher notificationPublisher;
 
+
     @Autowired
     private IdentityClient identityClient;
 
@@ -69,7 +70,7 @@ public class SubmissionService implements ISubmissionService {
         proyecto.setModalidad(dto.getModalidad());
         proyecto.setDocenteDirectorId(dto.getDocenteDirectorId());
         proyecto.setDocenteCodirectorId(dto.getDocenteCodirectorId());
-        proyecto.setEstudiante1Id(dto.getEstudianteId());
+        proyecto.setEstudianteId(dto.getEstudianteId());
         proyecto.setObjetivoGeneral(dto.getObjetivoGeneral());
         proyecto.setObjetivosEspecificos(dto.getObjetivosEspecificos());
         proyecto.setRutaFormatoA(dto.getRutaFormatoA());
@@ -78,7 +79,7 @@ public class SubmissionService implements ISubmissionService {
         // El constructor ya inicializa el estado en FORMATO_A_DILIGENCIADO
         ProyectoSubmission guardado = submissionRepository.save(proyecto);
 
-        System.out.println("✅ Nuevo proyecto creado con ID: " + guardado.getId() +
+        System.out.println("âœ… Nuevo proyecto creado con ID: " + guardado.getId() +
                          " en estado: " + guardado.getEstadoNombre());
 
         return convertirADTO(guardado);
@@ -86,32 +87,32 @@ public class SubmissionService implements ISubmissionService {
 
     /**
      * Presentar el formato A al coordinador
-     * Transición: FORMATO_A_DILIGENCIADO -> PRESENTADO_AL_COORDINADOR
+     * TransiciÃ³n: FORMATO_A_DILIGENCIADO -> PRESENTADO_AL_COORDINADOR
      */
     public SubmissionResponseDTO presentarAlCoordinador(Long id) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
 
-        // Delegar al patrón State
+        // Delegar al patrÃ³n State
         proyecto.presentarAlCoordinador();
 
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-        System.out.println("📤 Proyecto " + id + " presentado al coordinador");
+        System.out.println("ðŸ“¤ Proyecto " + id + " presentado al coordinador");
 
         return convertirADTO(actualizado);
     }
 
     /**
-     * Enviar el formato A al comité para evaluación
-     * Transición: PRESENTADO_AL_COORDINADOR -> EN_EVALUACION_COMITE
+     * Enviar el formato A al comitÃ© para evaluaciÃ³n
+     * TransiciÃ³n: PRESENTADO_AL_COORDINADOR -> EN_EVALUACION_COMITE
      */
     public SubmissionResponseDTO enviarAComite(Long id) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
 
-        // Delegar al patrón State
+        // Delegar al patrÃ³n State
         proyecto.enviarAComite();
 
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-        System.out.println("📨 Proyecto " + id + " enviado al comité para evaluación");
+        System.out.println("ðŸ“¨ Proyecto " + id + " enviado al comitÃ© para evaluaciÃ³n");
 
         return convertirADTO(actualizado);
     }
@@ -126,15 +127,15 @@ public class SubmissionService implements ISubmissionService {
     public SubmissionResponseDTO evaluar(Long id, EvaluacionDTO evaluacion) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
 
-        // Delegar al patrón State
+        // Delegar al patrÃ³n State
         proyecto.evaluar(evaluacion.getAprobado(), evaluacion.getComentarios());
 
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
 
         if (evaluacion.getAprobado()) {
-            System.out.println("✅ Proyecto " + id + " APROBADO por el comité");
+            System.out.println("âœ… Proyecto " + id + " APROBADO por el comitÃ©");
         } else {
-            System.out.println("❌ Proyecto " + id + " RECHAZADO (Intento " +
+            System.out.println("âŒ Proyecto " + id + " RECHAZADO (Intento " +
                              actualizado.getNumeroIntentos() + "/3)");
         }
 
@@ -142,17 +143,17 @@ public class SubmissionService implements ISubmissionService {
     }
 
     /**
-     * Subir una nueva versión del formato A tras correcciones
-     * Transición: CORRECCIONES_COMITE -> EN_EVALUACION_COMITE
+     * Subir una nueva versiÃ³n del formato A tras correcciones
+     * TransiciÃ³n: CORRECCIONES_COMITE -> EN_EVALUACION_COMITE
      */
     public SubmissionResponseDTO subirNuevaVersion(Long id) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
 
-        // Delegar al patrón State
+        // Delegar al patrÃ³n State
         proyecto.subirNuevaVersion();
 
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-        System.out.println("🔄 Proyecto " + id + " - Nueva versión subida, reenviando al comité");
+        System.out.println("ðŸ”„ Proyecto " + id + " - Nueva versiÃ³n subida, reenviando al comitÃ©");
 
         return convertirADTO(actualizado);
     }
@@ -210,7 +211,7 @@ public class SubmissionService implements ISubmissionService {
                 .collect(Collectors.toList());
     }
 
-    // Métodos auxiliares privados
+    // MÃ©todos auxiliares privados
 
     private ProyectoSubmission obtenerProyectoPorId(Long id) {
         return submissionRepository.findById(id)
@@ -229,7 +230,8 @@ public class SubmissionService implements ISubmissionService {
 
         dto.setDocenteDirectorId(proyecto.getDocenteDirectorId());
         dto.setDocenteCodirectorId(proyecto.getDocenteCodirectorId());
-        dto.setEstudianteId(proyecto.getEstudiante1Id());
+        dto.setEstudiante1Id(proyecto.getEstudiante1Id());
+        dto.setEstudiante2Id(proyecto.getEstudiante2Id());
 
         dto.setObjetivoGeneral(proyecto.getObjetivoGeneral());
         dto.setObjetivosEspecificos(proyecto.getObjetivosEspecificos());
@@ -245,11 +247,11 @@ public class SubmissionService implements ISubmissionService {
         return dto;
     }
 
-    // Implementación de métodos de ISubmissionService
+    // ImplementaciÃ³n de mÃ©todos de ISubmissionService
 
     @Override
     public IdResponse crearFormatoA(String userId, FormatoAData data, MultipartFile pdf, MultipartFile carta) {
-        log.info("📝 Creando Formato A inicial - Usuario: {}, Título: {}", userId, data.getTitulo());
+        log.info("ðŸ“ Creando Formato A inicial - Usuario: {}, TÃ­tulo: {}", userId, data.getTitulo());
 
         // 1. Validar archivos
         if (pdf == null || pdf.isEmpty()) {
@@ -272,190 +274,116 @@ public class SubmissionService implements ISubmissionService {
         proyecto.setModalidad(data.getModalidad());
         proyecto.setObjetivoGeneral(data.getObjetivoGeneral());
         proyecto.setObjetivosEspecificos(String.join("; ", data.getObjetivosEspecificos()));
-
-        // IMPORTANTE: Si el usuario que crea el FormatoA es DOCENTE, se asigna como director automáticamente
-        // Esto permite que quien crea el proyecto pueda luego subir el anteproyecto
-        Long directorIdFinal = Long.valueOf(userId); // El usuario logueado es el director
-        proyecto.setDocenteDirectorId(directorIdFinal);
-
+        proyecto.setDocenteDirectorId(Long.valueOf(data.getDirectorId()));
         proyecto.setDocenteCodirectorId(data.getCodirectorId() != null ? Long.valueOf(data.getCodirectorId()) : null);
         proyecto.setEstudiante1Id(Long.valueOf(data.getEstudiante1Id()));
         proyecto.setEstudiante2Id(data.getEstudiante2Id() != null ? Long.valueOf(data.getEstudiante2Id()) : null);
         proyecto.setRutaFormatoA(rutaPdf);
         proyecto.setRutaCarta(rutaCarta);
-        proyecto.setNumeroIntentos(1); // Primera versión
-
-        log.info("✅ Proyecto configurado - Director: {} (usuario que crea el FormatoA)", directorIdFinal);
+        proyecto.setNumeroIntentos(1); // Primera versiÃ³n
 
         // 4. Guardar en BD
         ProyectoSubmission guardado = submissionRepository.save(proyecto);
-        log.info("✅ Proyecto creado con ID: {}", guardado.getId());
+        log.info("âœ… Proyecto creado con ID: {}", guardado.getId());
 
-        // 5. Obtener información del usuario responsable desde Identity Service
+        // 5. Obtener informaciÃ³n del usuario responsable desde Identity Service
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
-        log.info("✅ Usuario responsable obtenido: {}", userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO");
+        log.info("âœ… Usuario responsable obtenido: {}", userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO");
 
-        // 6. Obtener programa del estudiante (manejo seguro de nulls)
-        String programa = "DESCONOCIDO";
-        try {
-            IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(Long.valueOf(data.getEstudiante1Id()));
-            if (estudianteInfo != null && estudianteInfo.programa() != null) {
-                programa = estudianteInfo.programa();
-                log.info("✅ Programa del estudiante obtenido: {}", programa);
-            } else {
-                log.warn("⚠️ No se pudo obtener el programa del estudiante {}, usando valor por defecto", data.getEstudiante1Id());
-            }
-        } catch (Exception e) {
-            log.error("❌ Error al obtener programa del estudiante {}, usando valor por defecto", data.getEstudiante1Id(), e);
+        // 6. Obtener informaciÃ³n completa del director
+        IdentityClient.UserBasicInfo directorInfo = identityClient.getUserById(Long.valueOf(data.getDirectorId()));
+        String directorNombre = directorInfo != null ? directorInfo.getNombreCompleto() : "Director Desconocido";
+        log.info("âœ… Director obtenido: {}", directorNombre);
+
+        // 7. Obtener informaciÃ³n del codirector (si existe)
+        String codirectorNombre = null;
+        if (data.getCodirectorId() != null) {
+            IdentityClient.UserBasicInfo codirectorInfo = identityClient.getUserById(Long.valueOf(data.getCodirectorId()));
+            codirectorNombre = codirectorInfo != null ? codirectorInfo.getNombreCompleto() : "Codirector Desconocido";
+            log.info("âœ… Codirector obtenido: {}", codirectorNombre);
         }
 
-        // 7. Publicar evento a Progress Tracking (NUEVO)
+        // 8. Obtener informaciÃ³n completa del estudiante 1 (incluyendo programa)
+        IdentityClient.UserBasicInfo estudiante1Info = identityClient.getUserById(Long.valueOf(data.getEstudiante1Id()));
+        String estudiante1Nombre = estudiante1Info != null ? estudiante1Info.getNombreCompleto() : "Estudiante Desconocido";
+        String programa = "DESCONOCIDO";
+        if (estudiante1Info != null && estudiante1Info.programa() != null) {
+            programa = estudiante1Info.programa();
+            log.info("âœ… Estudiante 1 obtenido: {} - Programa: {}", estudiante1Nombre, programa);
+        } else {
+            log.warn("âš ï¸ No se pudo obtener el programa del estudiante {}, usando valor por defecto", data.getEstudiante1Id());
+        }
+
+        // 9. Obtener informaciÃ³n del estudiante 2 (si existe)
+        String estudiante2Nombre = null;
+        if (data.getEstudiante2Id() != null) {
+            IdentityClient.UserBasicInfo estudiante2Info = identityClient.getUserById(Long.valueOf(data.getEstudiante2Id()));
+            estudiante2Nombre = estudiante2Info != null ? estudiante2Info.getNombreCompleto() : "Estudiante 2 Desconocido";
+            log.info("âœ… Estudiante 2 obtenido: {}", estudiante2Nombre);
+        }
+
+        // 10. Publicar evento a Progress Tracking con TODOS los campos
         FormatoAEnviadoEvent event = FormatoAEnviadoEvent.builder()
                 .proyectoId(guardado.getId())
                 .titulo(guardado.getTitulo())
                 .modalidad(guardado.getModalidad().name())
                 .programa(programa)
                 .version(1)
-                .descripcion("Primera versión del Formato A")
+                .descripcion("Primera versiÃ³n del Formato A")
                 .timestamp(LocalDateTime.now())
                 .usuarioResponsableId(Long.valueOf(userId))
                 .usuarioResponsableNombre(userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO")
                 .usuarioResponsableRol("DOCENTE")
+                // âœ¨ NUEVOS CAMPOS - InformaciÃ³n completa del proyecto
+                .directorId(Long.valueOf(data.getDirectorId()))
+                .directorNombre(directorNombre)
+                .codirectorId(data.getCodirectorId() != null ? Long.valueOf(data.getCodirectorId()) : null)
+                .codirectorNombre(codirectorNombre)
+                .estudiante1Id(Long.valueOf(data.getEstudiante1Id()))
+                .estudiante1Nombre(estudiante1Nombre)
+                .estudiante2Id(data.getEstudiante2Id() != null ? Long.valueOf(data.getEstudiante2Id()) : null)
+                .estudiante2Nombre(estudiante2Nombre)
                 .build();
 
-        log.info("📤 Publicando evento FormatoAEnviado para proyecto: {}", guardado.getId());
+        log.info("ðŸ“¤ Publicando evento FormatoAEnviado para proyecto: {}", guardado.getId());
         progressEventPublisher.publicarFormatoAEnviado(event);
-        log.info("✅ Evento FormatoAEnviado publicado exitosamente");
+        log.info("âœ… Evento FormatoAEnviado publicado exitosamente");
 
-        // 8. Obtener email del coordinador y enviar notificación (RF2)
+        // 11. Obtener email del coordinador y enviar notificaciÃ³n (RF2)
         try {
             String coordinadorEmail = identityClient.getCoordinadorEmail();
             notificationPublisher.notificarFormatoAEnviado(
                     guardado.getId().intValue(),
                     guardado.getTitulo(),
-                    1, // versión 1
+                    1, // versiÃ³n 1
                     userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO",
                     coordinadorEmail
             );
-            log.info("✉️ RF2: Notificación enviada al coordinador: {}", coordinadorEmail);
+            log.info("âœ‰ï¸ RF2: NotificaciÃ³n enviada al coordinador: {}", coordinadorEmail);
         } catch (Exception e) {
-            log.error("❌ RF2: Error al enviar notificación, pero el Formato A fue creado exitosamente", e);
-            // No fallar la operación principal por error en notificación
+            log.error("âŒ RF2: Error al enviar notificaciÃ³n, pero el Formato A fue creado exitosamente", e);
+            // No fallar la operaciÃ³n principal por error en notificaciÃ³n
         }
 
-        // 9. Retornar respuesta
+        // 12. Retornar respuesta
         return new IdResponse(guardado.getId());
     }
 
     @Override
     public FormatoAView obtenerFormatoA(Long id) {
-        log.info("📋 Obteniendo Formato A por ID: {}", id);
-
-        ProyectoSubmission proyecto = submissionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Formato A no encontrado: " + id));
-
-        FormatoAView view = convertirProyectoAFormatoAView(proyecto);
-        log.info("✅ Formato A {} encontrado: {}", id, proyecto.getTitulo());
-        return view;
+        // TODO: Implementar lÃ³gica completa
+        throw new UnsupportedOperationException("MÃ©todo obtenerFormatoA aÃºn no implementado");
     }
 
     @Override
     public FormatoAPage listarFormatoA(Optional<String> docenteId, int page, int size) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método listarFormatoA aún no implementado");
-    }
-
-    @Override
-    public FormatoAPage listarFormatosAPendientes(int page, int size) {
-        log.info("📋 Listando Formatos A pendientes - page: {}, size: {}", page, size);
-
-        // Crear objeto Pageable para paginación
-        org.springframework.data.domain.Pageable pageable =
-            org.springframework.data.domain.PageRequest.of(page, size);
-
-        // Obtener proyectos pendientes desde el repositorio
-        org.springframework.data.domain.Page<ProyectoSubmission> proyectos =
-            submissionRepository.findFormatosAPendientes(pageable);
-
-        // Convertir entidades a DTOs
-        List<FormatoAView> formatosView = proyectos.getContent().stream()
-            .map(this::convertirProyectoAFormatoAView)
-            .collect(Collectors.toList());
-
-        // Construir respuesta paginada
-        FormatoAPage response = new FormatoAPage();
-        response.setContent(formatosView);
-        response.setPage(proyectos.getNumber());
-        response.setSize(proyectos.getSize());
-        response.setTotalElements(proyectos.getTotalElements());
-
-        log.info("✅ Se encontraron {} Formatos A pendientes", formatosView.size());
-        return response;
-    }
-
-    private FormatoAView convertirProyectoAFormatoAView(ProyectoSubmission proyecto) {
-        FormatoAView view = new FormatoAView();
-        view.setId(proyecto.getId());
-        view.setProyectoId(proyecto.getId());
-        view.setTitulo(proyecto.getTitulo());
-        view.setVersion(proyecto.getNumeroIntentos());
-
-        // Mapear estado del proyecto a estado del formato - SIEMPRE establecer un estado
-        if ("FORMATO_A_DILIGENCIADO".equals(proyecto.getEstadoNombre()) ||
-            "PRESENTADO_AL_COORDINADOR".equals(proyecto.getEstadoNombre()) ||
-            "EN_EVALUACION_COMITE".equals(proyecto.getEstadoNombre())) {
-            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.PENDIENTE);
-        } else if ("ACEPTADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
-            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.APROBADO);
-        } else if ("RECHAZADO_POR_COMITE".equals(proyecto.getEstadoNombre()) ||
-                   "CORRECCIONES_COMITE".equals(proyecto.getEstadoNombre())) {
-            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.RECHAZADO);
-        } else {
-            // Valor por defecto
-            view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.PENDIENTE);
-        }
-
-        view.setObservaciones(proyecto.getComentariosComite());
-        view.setPdfUrl(proyecto.getRutaFormatoA());
-        view.setCartaUrl(proyecto.getRutaCarta());
-        view.setFechaEnvio(proyecto.getFechaCreacion());
-
-        // Extraer nombre del archivo de la ruta
-        if (proyecto.getRutaFormatoA() != null) {
-            String[] partes = proyecto.getRutaFormatoA().split("/");
-            view.setNombreArchivo(partes[partes.length - 1]);
-        }
-
-        // Obtener información del docente director desde Identity Service
-        try {
-            IdentityClient.UserBasicInfo directorInfo = identityClient.getUserById(proyecto.getDocenteDirectorId());
-            view.setDocenteDirectorNombre(directorInfo.getNombreCompleto());
-            view.setDocenteDirectorEmail(directorInfo.email());
-        } catch (Exception e) {
-            log.warn("No se pudo obtener información del director {}: {}", proyecto.getDocenteDirectorId(), e.getMessage());
-            view.setDocenteDirectorNombre("Director ID: " + proyecto.getDocenteDirectorId());
-            view.setDocenteDirectorEmail("director." + proyecto.getDocenteDirectorId() + "@unicauca.edu.co");
-        }
-
-        // Obtener información del estudiante desde Identity Service
-        List<String> estudiantesEmails = new java.util.ArrayList<>();
-        if (proyecto.getEstudianteId() != null) {
-            try {
-                IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(proyecto.getEstudianteId());
-                estudiantesEmails.add(estudianteInfo.email());
-            } catch (Exception e) {
-                log.warn("No se pudo obtener información del estudiante {}: {}", proyecto.getEstudianteId(), e.getMessage());
-                estudiantesEmails.add("estudiante." + proyecto.getEstudianteId() + "@unicauca.edu.co");
-            }
-        }
-        view.setEstudiantesEmails(estudiantesEmails);
-
-        return view;
+        // TODO: Implementar lÃ³gica completa
+        throw new UnsupportedOperationException("MÃ©todo listarFormatoA aÃºn no implementado");
     }
 
     @Override
     public IdResponse reenviarFormatoA(String userId, Long proyectoId, MultipartFile pdf, MultipartFile carta) {
-        log.info("🔄 Reenviando Formato A - Proyecto: {}, Usuario: {}", proyectoId, userId);
+        log.info("ðŸ”„ Reenviando Formato A - Proyecto: {}, Usuario: {}", proyectoId, userId);
 
         // 1. Validar que el proyecto existe
         ProyectoSubmission proyecto = submissionRepository.findById(proyectoId)
@@ -466,14 +394,14 @@ public class SubmissionService implements ISubmissionService {
             throw new IllegalArgumentException("Solo el director del proyecto puede reenviar el Formato A");
         }
 
-        // 3. Validar que no está rechazado definitivamente
+        // 3. Validar que no estÃ¡ rechazado definitivamente
         if ("RECHAZADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
             throw new IllegalArgumentException("El proyecto fue rechazado definitivamente, no se puede reenviar");
         }
 
         // 4. Validar que no excede 3 intentos
         if (proyecto.getNumeroIntentos() >= 3) {
-            throw new IllegalArgumentException("Se alcanzó el máximo de intentos (3)");
+            throw new IllegalArgumentException("Se alcanzÃ³ el mÃ¡ximo de intentos (3)");
         }
 
         // 5. Validar archivos
@@ -495,25 +423,25 @@ public class SubmissionService implements ISubmissionService {
 
         // 8. Guardar en BD
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-        log.info("✅ Formato A reenviado - Intento: {}/3", actualizado.getNumeroIntentos());
+        log.info("âœ… Formato A reenviado - Intento: {}/3", actualizado.getNumeroIntentos());
 
-        // 9. Obtener información del usuario
+        // 9. Obtener informaciÃ³n del usuario responsable
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
-        log.info("✅ Usuario responsable obtenido: {}", userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO");
+        log.info("âœ… Usuario responsable obtenido: {}", userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO");
 
-        // 10. Obtener información completa del director
+        // 10. Obtener informaciÃ³n completa del director
         IdentityClient.UserBasicInfo directorInfo = identityClient.getUserById(actualizado.getDocenteDirectorId());
         String directorNombre = directorInfo != null ? directorInfo.getNombreCompleto() : "Director Desconocido";
 
-        // 11. Obtener información del codirector (si existe)
+        // 11. Obtener informaciÃ³n del codirector (si existe)
         String codirectorNombre = null;
         if (actualizado.getDocenteCodirectorId() != null) {
             IdentityClient.UserBasicInfo codirectorInfo = identityClient.getUserById(actualizado.getDocenteCodirectorId());
             codirectorNombre = codirectorInfo != null ? codirectorInfo.getNombreCompleto() : "Codirector Desconocido";
         }
 
-        // 12. Obtener información completa del estudiante 1 (incluyendo programa)
-        IdentityClient.UserBasicInfo estudiante1Info = identityClient.getUserById(actualizado.getEstudiante1Id());
+        // 12. Obtener informaciÃ³n completa del estudiante 1 (incluyendo programa)
+        IdentityClient.UserBasicInfo estudiante1Info = identityClient.getUserById(actualizado.getEstudianteId());
         String estudiante1Nombre = estudiante1Info != null ? estudiante1Info.getNombreCompleto() : "Estudiante Desconocido";
         String programa = "DESCONOCIDO";
         if (estudiante1Info != null && estudiante1Info.programa() != null) {
@@ -525,176 +453,118 @@ public class SubmissionService implements ISubmissionService {
         String estudiante2Nombre = null;
         Long estudiante2Id = null;
 
-        // 14. Publicar evento a Progress Tracking con información completa
+        // 14. Publicar evento a Progress Tracking con informaciÃ³n completa
         FormatoAReenviadoEvent event = FormatoAReenviadoEvent.builder()
                 .proyectoId(actualizado.getId())
+                .titulo(actualizado.getTitulo())
+                .modalidad(actualizado.getModalidad().name())
+                .programa(programa)
                 .version(actualizado.getNumeroIntentos())
-                .descripcion("Correcciones aplicadas - versión " + actualizado.getNumeroIntentos())
+                .descripcion("Correcciones aplicadas - versiÃ³n " + actualizado.getNumeroIntentos())
                 .timestamp(LocalDateTime.now())
                 .usuarioResponsableId(Long.valueOf(userId))
                 .usuarioResponsableNombre(userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO")
                 .usuarioResponsableRol("DOCENTE")
-
-                // ✨ Información completa del proyecto
+                // âœ¨ InformaciÃ³n completa del proyecto
                 .directorId(actualizado.getDocenteDirectorId())
                 .directorNombre(directorNombre)
                 .codirectorId(actualizado.getDocenteCodirectorId())
                 .codirectorNombre(codirectorNombre)
-                .estudiante1Id(actualizado.getEstudiante1Id())
+                .estudiante1Id(actualizado.getEstudianteId())
                 .estudiante1Nombre(estudiante1Nombre)
                 .estudiante2Id(estudiante2Id)
+                .estudiante2Nombre(estudiante2Nombre)
                 .build();
 
-        log.info("📤 Publicando evento FormatoAReenviado para proyecto: {} versión: {}",
+        log.info("ðŸ“¤ Publicando evento FormatoAReenviado para proyecto: {} versiÃ³n: {}",
                 actualizado.getId(), actualizado.getNumeroIntentos());
         progressEventPublisher.publicarFormatoAReenviado(event);
-        log.info("✅ Evento FormatoAReenviado publicado exitosamente");
+        log.info("âœ… Evento FormatoAReenviado publicado exitosamente");
 
-        // 11. Obtener email del coordinador y enviar notificación (RF4)
+        // 15. Obtener email del coordinador y enviar notificaciÃ³n (RF4)
         try {
             String coordinadorEmail = identityClient.getCoordinadorEmail();
             notificationPublisher.notificarFormatoAEnviado(
                     actualizado.getId().intValue(),
                     actualizado.getTitulo(),
-                    actualizado.getNumeroIntentos(), // versión 2 o 3
+                    actualizado.getNumeroIntentos(), // versiÃ³n 2 o 3
                     userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO",
                     coordinadorEmail
             );
-            log.info("✉️ RF4: Notificación de reenvío (v{}) enviada al coordinador: {}",
+            log.info("âœ‰ï¸ RF4: NotificaciÃ³n de reenvÃ­o (v{}) enviada al coordinador: {}",
                      actualizado.getNumeroIntentos(), coordinadorEmail);
         } catch (Exception e) {
-            log.error("❌ RF4: Error al enviar notificación, pero el Formato A fue reenviado exitosamente", e);
-            // No fallar la operación principal por error en notificación
+            log.error("âŒ RF4: Error al enviar notificaciÃ³n, pero el Formato A fue reenviado exitosamente", e);
+            // No fallar la operaciÃ³n principal por error en notificaciÃ³n
         }
 
-        // 12. Retornar respuesta
+        // 16. Retornar respuesta
         return new IdResponse(actualizado.getId());
     }
 
     @Override
     public void cambiarEstadoFormatoA(Long versionId, EvaluacionRequest req) {
-        log.info("📋 Cambiando estado de Formato A - ID: {}, Nuevo Estado: {}", versionId, req.getEstado());
-
-        // Buscar el proyecto por ID (versionId es el proyectoId en este contexto)
-        ProyectoSubmission proyecto = submissionRepository.findById(versionId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Proyecto no encontrado con ID: " + versionId));
-
-        log.info("🔍 Proyecto encontrado: ID={}, Estado actual={}, Intento={}/3",
-                proyecto.getId(), proyecto.getEstadoNombre(), proyecto.getNumeroIntentos());
-
-        // Validar que el proyecto está en un estado evaluable
-        if (!"EN_EVALUACION_COMITE".equals(proyecto.getEstadoNombre())) {
-            log.warn("⚠️ El proyecto no está en estado EN_EVALUACION_COMITE. Estado actual: {}",
-                    proyecto.getEstadoNombre());
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "El proyecto no está en evaluación. Estado actual: " + proyecto.getEstadoNombre());
-        }
-
-        // Evaluar según la decisión (puede venir como enum o string)
-        boolean aprobado = req.getEstado() == co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.APROBADO;
-        String observaciones = req.getObservaciones() != null ? req.getObservaciones() : "";
-
-        // Delegar al patrón State para manejar la transición
-        proyecto.evaluar(aprobado, observaciones);
-
-        // Guardar los cambios
-        ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-
-        log.info("✅ Estado de Formato A {} actualizado exitosamente: {} (Intento {}/3)",
-                actualizado.getId(), actualizado.getEstadoNombre(), actualizado.getNumeroIntentos());
+        // TODO: Implementar lÃ³gica completa
+        throw new UnsupportedOperationException("MÃ©todo cambiarEstadoFormatoA aÃºn no implementado");
     }
 
     @Override
     public IdResponse subirAnteproyecto(String userId, AnteproyectoData data, MultipartFile pdf) {
-        log.info("📄 Subiendo anteproyecto - Proyecto: {}, Usuario: {}", data.getProyectoId(), userId);
+        log.info("ðŸ“„ Subiendo anteproyecto - Proyecto: {}, Usuario: {}", data.getProyectoId(), userId);
 
         // 1. Validar PDF obligatorio
         validarArchivoPdfObligatorio(pdf);
 
-        // 2. Buscar proyecto en ProyectoSubmission (donde está el Formato A aprobado)
-        ProyectoSubmission proyectoSubmission = submissionRepository.findById(data.getProyectoId())
+        // 2. Buscar proyecto en ProyectoGrado (NO ProyectoSubmission)
+        ProyectoGrado proyecto = proyectoGradoRepository.findById(data.getProyectoId().intValue())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Proyecto no existe"));
 
-        log.info("🔍 Proyecto encontrado: ID={}, Título={}, Director={}",
-                proyectoSubmission.getId(), proyectoSubmission.getTitulo(), proyectoSubmission.getDocenteDirectorId());
+        log.info("ðŸ” Proyecto encontrado: ID={}, TÃ­tulo={}, Director={}",
+                proyecto.getId(), proyecto.getTitulo(), proyecto.getDirectorId());
 
         // 3. Validar que el usuario es el DIRECTOR del proyecto
-        if (proyectoSubmission.getDocenteDirectorId() == null) {
-            log.error("❌ El proyecto {} no tiene director asignado", proyectoSubmission.getId());
+        if (proyecto.getDirectorId() == null) {
+            log.error("âŒ El proyecto {} no tiene director asignado", proyecto.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "El proyecto no tiene director asignado");
         }
 
-        // Convertir userId a Long para comparar correctamente
-        Long userIdLong = Long.valueOf(userId);
-        if (!proyectoSubmission.getDocenteDirectorId().equals(userIdLong)) {
-            log.error("❌ Usuario {} NO es el director del proyecto (director: {})", userId, proyectoSubmission.getDocenteDirectorId());
+        // Convertir userId a Integer para comparar correctamente
+        Integer userIdInt = Integer.valueOf(userId);
+        if (!proyecto.getDirectorId().equals(userIdInt)) {
+            log.error("âŒ Usuario {} NO es el director del proyecto (director: {})", userId, proyecto.getDirectorId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Solo el director del proyecto puede subir el anteproyecto");
         }
 
-        log.info("✅ Validación de director exitosa: Usuario {} es el director", userId);
+        log.info("âœ… ValidaciÃ³n de director exitosa: Usuario {} es el director", userId);
 
-        // 4. Validar que el Formato A está APROBADO (estado ACEPTADO_POR_COMITE)
-        if (!"ACEPTADO_POR_COMITE".equals(proyectoSubmission.getEstadoNombre())) {
-            log.error("❌ El Formato A del proyecto {} NO está aprobado (estado actual: {})",
-                    proyectoSubmission.getId(), proyectoSubmission.getEstadoNombre());
+        // 4. Validar que el Formato A estÃ¡ APROBADO
+        if (proyecto.getEstado() != enumEstadoProyecto.APROBADO) {
+            log.error("âŒ El Formato A del proyecto {} NO estÃ¡ aprobado (estado actual: {})",
+                    proyecto.getId(), proyecto.getEstado());
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "El Formato A debe estar aprobado (ACEPTADO_POR_COMITE) antes de subir anteproyecto");
+                    "El Formato A debe estar aprobado antes de subir anteproyecto");
         }
 
-        log.info("✅ Formato A está aprobado, se puede subir anteproyecto");
+        log.info("âœ… Formato A estÃ¡ aprobado, se puede subir anteproyecto");
 
-        // 5. Crear o buscar ProyectoGrado (para mantener compatibilidad con el resto del código)
-        // NOTA: proyectos_grado mantiene su propio ID independiente de proyecto_submissions
-        // Esto es por diseño - son dos tablas diferentes con propósitos diferentes:
-        //   - proyecto_submissions: gestiona el flujo de Formato A (con estados)
-        //   - proyectos_grado: gestiona el anteproyecto y datos legacy
-        ProyectoGrado proyecto = proyectoGradoRepository.findById(data.getProyectoId().intValue())
-                .orElseGet(() -> {
-                    log.info("🆕 Creando ProyectoGrado desde ProyectoSubmission (ID submission={})", proyectoSubmission.getId());
-                    ProyectoGrado nuevo = new ProyectoGrado();
-                    // No asignamos ID manualmente - dejamos que PostgreSQL lo genere
-                    nuevo.setTitulo(proyectoSubmission.getTitulo());
-                    nuevo.setModalidad(proyectoSubmission.getModalidad());
-                    nuevo.setDirectorId(proyectoSubmission.getDocenteDirectorId().intValue());
-                    nuevo.setCodirectorId(proyectoSubmission.getDocenteCodirectorId() != null ?
-                            proyectoSubmission.getDocenteCodirectorId().intValue() : null);
-                    nuevo.setEstudiante1Id(proyectoSubmission.getEstudiante1Id().intValue());
-                    nuevo.setEstudiante2Id(proyectoSubmission.getEstudiante2Id() != null ?
-                            proyectoSubmission.getEstudiante2Id().intValue() : null);
-                    nuevo.setObjetivoGeneral(proyectoSubmission.getObjetivoGeneral());
-                    nuevo.setObjetivosEspecificos(proyectoSubmission.getObjetivosEspecificos());
-                    nuevo.setEstado(enumEstadoProyecto.APROBADO);
-                    nuevo.setNumeroIntentos(proyectoSubmission.getNumeroIntentos());
-                    ProyectoGrado guardado = proyectoGradoRepository.save(nuevo);
-                    log.info("✅ ProyectoGrado creado: ID_ProyectoGrado={} basado en ProyectoSubmission ID={}",
-                            guardado.getId(), proyectoSubmission.getId());
-                    return guardado;
-                });
-
-        log.info("✅ ProyectoGrado preparado: ID_ProyectoGrado={} | ID_ProyectoSubmission={}",
-                proyecto.getId(), proyectoSubmission.getId());
-
-        // 6. Validar que NO existe anteproyecto previo
+        // 5. Validar que NO existe anteproyecto previo
         Optional<Anteproyecto> existente = anteproyectoRepository.findByProyecto(proyecto);
         if (existente.isPresent()) {
-            log.error("❌ Ya existe un anteproyecto para el proyecto {}", proyecto.getId());
+            log.error("âŒ Ya existe un anteproyecto para el proyecto {}", proyecto.getId());
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Ya existe un anteproyecto para este proyecto");
         }
 
-        log.info("✅ No hay anteproyecto previo, se procede a crear uno nuevo");
+        log.info("âœ… No hay anteproyecto previo, se procede a crear uno nuevo");
 
         // 6. Guardar archivo PDF en disco
         String baseDir = "anteproyectos/" + proyecto.getId();
         String pdfPath = guardarArchivo(baseDir, "documento.pdf", pdf);
-        log.info("✅ PDF guardado en: {}", pdfPath);
+        log.info("âœ… PDF guardado en: {}", pdfPath);
 
         // 7. Crear entidad Anteproyecto
         Anteproyecto anteproyecto = new Anteproyecto();
@@ -707,29 +577,29 @@ public class SubmissionService implements ISubmissionService {
 
         // 8. Guardar en BD
         anteproyectoRepository.save(anteproyecto);
-        log.info("✅ Anteproyecto guardado en BD para proyecto: {}", proyecto.getId());
+        log.info("âœ… Anteproyecto guardado en BD para proyecto: {}", proyecto.getId());
 
-        // 9. Obtener información del usuario responsable (director)
+        // 9. Obtener informaciÃ³n del usuario responsable (director)
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
-        log.info("✅ Usuario responsable obtenido: {}", userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO");
+        log.info("âœ… Usuario responsable obtenido: {}", userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO");
 
-        // 10. Obtener información del director
+        // 10. Obtener informaciÃ³n del director
         String directorNombre = "Director Desconocido";
         if (proyecto.getDirectorId() != null) {
             IdentityClient.UserBasicInfo directorInfo = identityClient.getUserById(proyecto.getDirectorId().longValue());
             directorNombre = directorInfo != null ? directorInfo.getNombreCompleto() : "Director Desconocido";
-            log.info("✅ Director obtenido: {}", directorNombre);
+            log.info("âœ… Director obtenido: {}", directorNombre);
         }
 
-        // 11. Obtener información del codirector (si existe)
+        // 11. Obtener informaciÃ³n del codirector (si existe)
         String codirectorNombre = null;
         if (proyecto.getCodirectorId() != null) {
             IdentityClient.UserBasicInfo codirectorInfo = identityClient.getUserById(proyecto.getCodirectorId().longValue());
             codirectorNombre = codirectorInfo != null ? codirectorInfo.getNombreCompleto() : "Codirector Desconocido";
-            log.info("✅ Codirector obtenido: {}", codirectorNombre);
+            log.info("âœ… Codirector obtenido: {}", codirectorNombre);
         }
 
-        // 12. Obtener información del estudiante 1 (y su programa)
+        // 12. Obtener informaciÃ³n del estudiante 1 (y su programa)
         String estudiante1Nombre = "Estudiante Desconocido";
         String programa = "DESCONOCIDO";
         if (proyecto.getEstudiante1Id() != null) {
@@ -738,15 +608,15 @@ public class SubmissionService implements ISubmissionService {
             if (estudiante1Info != null && estudiante1Info.programa() != null) {
                 programa = estudiante1Info.programa();
             }
-            log.info("✅ Estudiante 1 obtenido: {} - Programa: {}", estudiante1Nombre, programa);
+            log.info("âœ… Estudiante 1 obtenido: {} - Programa: {}", estudiante1Nombre, programa);
         }
 
-        // 13. Obtener información del estudiante 2 (si existe)
+        // 13. Obtener informaciÃ³n del estudiante 2 (si existe)
         String estudiante2Nombre = null;
         if (proyecto.getEstudiante2Id() != null) {
             IdentityClient.UserBasicInfo estudiante2Info = identityClient.getUserById(proyecto.getEstudiante2Id().longValue());
             estudiante2Nombre = estudiante2Info != null ? estudiante2Info.getNombreCompleto() : "Estudiante 2 Desconocido";
-            log.info("✅ Estudiante 2 obtenido: {}", estudiante2Nombre);
+            log.info("âœ… Estudiante 2 obtenido: {}", estudiante2Nombre);
         }
 
         // 14. Publicar evento a Progress Tracking con TODOS los campos
@@ -760,7 +630,7 @@ public class SubmissionService implements ISubmissionService {
                 .usuarioResponsableId(Long.valueOf(userId))
                 .usuarioResponsableNombre(userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO")
                 .usuarioResponsableRol("DOCENTE")
-                // ✨ Información completa del proyecto
+                // âœ¨ InformaciÃ³n completa del proyecto
                 .directorId(proyecto.getDirectorId() != null ? proyecto.getDirectorId().longValue() : null)
                 .directorNombre(directorNombre)
                 .codirectorId(proyecto.getCodirectorId() != null ? proyecto.getCodirectorId().longValue() : null)
@@ -771,11 +641,11 @@ public class SubmissionService implements ISubmissionService {
                 .estudiante2Nombre(estudiante2Nombre)
                 .build();
 
-        log.info("📤 Publicando evento AnteproyectoEnviado para proyecto: {}", proyecto.getId());
+        log.info("ðŸ“¤ Publicando evento AnteproyectoEnviado para proyecto: {}", proyecto.getId());
         progressEventPublisher.publicarAnteproyectoEnviado(event);
-        log.info("✅ Evento AnteproyectoEnviado publicado exitosamente");
+        log.info("âœ… Evento AnteproyectoEnviado publicado exitosamente");
 
-        // 15. Obtener email del jefe de departamento y enviar notificación (RF6)
+        // 15. Obtener email del jefe de departamento y enviar notificaciÃ³n (RF6)
         try {
             String jefeDepartamentoEmail = identityClient.getJefeDepartamentoEmail();
             notificationPublisher.notificarAnteproyectoEnviado(
@@ -784,10 +654,10 @@ public class SubmissionService implements ISubmissionService {
                     userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO",
                     jefeDepartamentoEmail
             );
-            log.info("✉️ RF6: Notificación enviada al jefe de departamento: {}", jefeDepartamentoEmail);
+            log.info("âœ‰ï¸ RF6: NotificaciÃ³n enviada al jefe de departamento: {}", jefeDepartamentoEmail);
         } catch (Exception e) {
-            log.error("❌ RF6: Error al enviar notificación, pero el Anteproyecto fue creado exitosamente", e);
-            // No fallar la operación principal por error en notificación
+            log.error("âŒ RF6: Error al enviar notificaciÃ³n, pero el Anteproyecto fue creado exitosamente", e);
+            // No fallar la operaciÃ³n principal por error en notificaciÃ³n
         }
 
         // 16. Retornar respuesta con el ID del PROYECTO (no del anteproyecto)
@@ -795,7 +665,7 @@ public class SubmissionService implements ISubmissionService {
     }
 
     /**
-     * Método auxiliar para validar que el archivo PDF es obligatorio
+     * MÃ©todo auxiliar para validar que el archivo PDF es obligatorio
      */
     private void validarArchivoPdfObligatorio(MultipartFile pdf) {
         if (pdf == null || pdf.isEmpty()) {
@@ -811,7 +681,7 @@ public class SubmissionService implements ISubmissionService {
     }
 
     /**
-     * Método auxiliar para guardar archivos en disco
+     * MÃ©todo auxiliar para guardar archivos en disco
      */
     private String guardarArchivo(String baseDir, String nombreArchivo, MultipartFile file) {
         try {
@@ -827,7 +697,7 @@ public class SubmissionService implements ISubmissionService {
 
             return filePath.toString();
         } catch (IOException e) {
-            log.error("❌ Error al guardar archivo: {}", e.getMessage(), e);
+            log.error("âŒ Error al guardar archivo: {}", e.getMessage(), e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Error al guardar el archivo", e);
         }
@@ -835,14 +705,13 @@ public class SubmissionService implements ISubmissionService {
 
     @Override
     public AnteproyectoPage listarAnteproyectos(int page, int size) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método listarAnteproyectos aún no implementado");
+        // TODO: Implementar lÃ³gica completa
+        throw new UnsupportedOperationException("MÃ©todo listarAnteproyectos aÃºn no implementado");
     }
 
     @Override
     public void cambiarEstadoAnteproyecto(Long id, CambioEstadoAnteproyectoRequest req) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método cambiarEstadoAnteproyecto aún no implementado");
+        // TODO: Implementar lÃ³gica completa
+        throw new UnsupportedOperationException("MÃ©todo cambiarEstadoAnteproyecto aÃºn no implementado");
     }
 }
-

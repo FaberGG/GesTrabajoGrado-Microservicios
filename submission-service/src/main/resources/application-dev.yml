@@ -1,0 +1,98 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: submission-service
+
+  datasource:
+    url: jdbc:postgresql://${DATABASE_HOST:submission-postgres}:${DATABASE_PORT:5432}/${DATABASE_NAME:submissiondb}
+    username: ${DATABASE_USERNAME:submission_user}
+    password: ${DATABASE_PASSWORD:submission_pass}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update  # validate en producción
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin_password}
+
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
+
+# Almacenamiento de archivos
+file:
+  storage:
+    path: ${FILE_STORAGE_PATH:/app/uploads}
+
+# Cliente HTTP para Identity Service
+identity:
+  base-url: ${IDENTITY_SERVICE_URL:http://identity:8081}
+  timeout-ms: 3000
+
+service:
+  internal:
+    token: ${SERVICE_INTERNAL_TOKEN:default-token-only-for-dev}
+
+# Configuración de notificaciones
+notification:
+  # Emails por defecto (TEMPORAL - deberían obtenerse del identity-service)
+  default:
+    coordinador-email: ${COORDINADOR_EMAIL:coordinador@unicauca.edu.co}
+    jefe-departamento-email: ${JEFE_DEPARTAMENTO_EMAIL:jefe.departamento@unicauca.edu.co}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    co.unicauca.comunicacionmicroservicios: DEBUG
+    org.springframework.amqp: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  health:
+    rabbit:
+      enabled: true
+    db:
+      enabled: true
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+    doc-expansion: none
+    display-request-duration: true
+    filter: false
+  show-actuator: false
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+

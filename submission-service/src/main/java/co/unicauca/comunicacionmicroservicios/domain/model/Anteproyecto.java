@@ -30,6 +30,10 @@ public class Anteproyecto {
     @Column(length = 30)
     private String estado; // opcional (si luego quieres manejar estados)
 
+    // Constructor vacío requerido por JPA
+    public Anteproyecto() {
+    }
+
     @PrePersist
     public void prePersist() {
         if (this.fechaEnvio == null) {

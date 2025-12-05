@@ -133,8 +133,10 @@ public class ProjectStateService {
     // ==========================================
 
     /**
-     * Actualiza estado tras envío de Anteproyecto
+     * Actualiza estado tras envío de Anteproyecto (VERSIÓN ANTIGUA - DEPRECADA)
+     * @deprecated Use actualizarEstadoAnteproyectoCompleto en su lugar
      */
+    @Deprecated
     @Transactional
     public void actualizarEstadoAnteproyecto(Long proyectoId, String nuevoEstado, Map<String, Object> payload) {
         log.debug("📄 Actualizando Anteproyecto - Proyecto: {}, Estado: {}", proyectoId, nuevoEstado);
@@ -151,6 +153,76 @@ public class ProjectStateService {
         proyectoEstadoRepository.save(estado);
 
         log.info("✅ Estado Anteproyecto actualizado - Proyecto: {} -> {}", proyectoId, nuevoEstado);
+    }
+
+    /**
+     * Actualiza estado tras envío de Anteproyecto con TODOS los campos del proyecto
+     * Esta es la versión completa que debe usarse para asegurar que todos los datos se persistan
+     */
+    @Transactional
+    public void actualizarEstadoAnteproyectoCompleto(
+            Long proyectoId,
+            String titulo,
+            String modalidad,
+            String programa,
+            String nuevoEstado,
+            Long directorId,
+            String directorNombre,
+            Long codirectorId,
+            String codirectorNombre,
+            Long estudiante1Id,
+            String estudiante1Nombre,
+            Long estudiante2Id,
+            String estudiante2Nombre
+    ) {
+        log.info("🔄 Actualizando estado COMPLETO Anteproyecto - Proyecto: {}, Estado: {}",
+                proyectoId, nuevoEstado);
+
+        // Obtener estado existente (debe existir porque ya pasó por Formato A)
+        ProyectoEstado estado = proyectoEstadoRepository.findById(proyectoId)
+                .orElseThrow(() -> {
+                    log.error("❌ Proyecto no encontrado: {}. El Formato A debe ser aprobado primero.", proyectoId);
+                    return new RuntimeException("Proyecto no encontrado: " + proyectoId);
+                });
+
+        // Actualizar información básica del proyecto (puede haber cambiado)
+        estado.setTitulo(titulo);
+        estado.setModalidad(modalidad);
+        estado.setPrograma(programa);
+        estado.setEstadoActual(nuevoEstado);
+        estado.setFase("ANTEPROYECTO");
+
+        // Actualizar campos específicos de Anteproyecto
+        estado.setAnteproyectoEstado("EN_EVALUACION");
+        estado.setAnteproyectoFechaEnvio(LocalDateTime.now());
+
+        // Actualizar Director (puede haber cambiado)
+        if (directorId != null) {
+            estado.setDirectorId(directorId);
+            estado.setDirectorNombre(directorNombre);
+        }
+
+        // Actualizar Co-director (opcional)
+        if (codirectorId != null) {
+            estado.setCodirectorId(codirectorId);
+            estado.setCodirectorNombre(codirectorNombre);
+        }
+
+        // Actualizar Estudiantes
+        if (estudiante1Id != null) {
+            estado.setEstudiante1Id(estudiante1Id);
+            estado.setEstudiante1Nombre(estudiante1Nombre);
+        }
+        if (estudiante2Id != null) {
+            estado.setEstudiante2Id(estudiante2Id);
+            estado.setEstudiante2Nombre(estudiante2Nombre);
+        }
+
+        estado.setUltimaActualizacion(LocalDateTime.now());
+        proyectoEstadoRepository.save(estado);
+
+        log.info("✅ Estado COMPLETO Anteproyecto actualizado - Proyecto: {}, Modalidad: {}, Programa: {}, Director: {}, Estudiantes: [{}, {}]",
+                proyectoId, modalidad, programa, directorNombre, estudiante1Nombre, estudiante2Nombre);
     }
 
     /**

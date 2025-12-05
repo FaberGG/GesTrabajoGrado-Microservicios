@@ -45,8 +45,13 @@ public class ProyectoSubmission {
     @Column
     private Long docenteCodirectorId;
 
+    // ✨ SOPORTE PARA 2 ESTUDIANTES
+    @NotNull(message = "Al menos un estudiante es obligatorio")
+    @Column(nullable = false)
+    private Long estudiante1Id;
+
     @Column
-    private Long estudianteId;
+    private Long estudiante2Id; // Opcional
 
     // Objetivos del proyecto
     @Column(columnDefinition = "TEXT")
@@ -210,12 +215,20 @@ public class ProyectoSubmission {
         this.docenteCodirectorId = docenteCodirectorId;
     }
 
-    public Long getEstudianteId() {
-        return estudianteId;
+    public Long getEstudiante1Id() {
+        return estudiante1Id;
     }
 
-    public void setEstudianteId(Long estudianteId) {
-        this.estudianteId = estudianteId;
+    public void setEstudiante1Id(Long estudiante1Id) {
+        this.estudiante1Id = estudiante1Id;
+    }
+
+    public Long getEstudiante2Id() {
+        return estudiante2Id;
+    }
+
+    public void setEstudiante2Id(Long estudiante2Id) {
+        this.estudiante2Id = estudiante2Id;
     }
 
     public String getObjetivoGeneral() {
