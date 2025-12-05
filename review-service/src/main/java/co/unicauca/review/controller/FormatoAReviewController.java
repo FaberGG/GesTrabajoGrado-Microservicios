@@ -70,8 +70,10 @@ public class FormatoAReviewController {
     public ResponseEntity<ApiResponse<EvaluationResultDTO>> evaluar(
             @PathVariable Long id,
             @Valid @RequestBody EvaluateFormatoARequestDTO request,
+
             @RequestHeader(value = "X-User-Id", required = true) Long userId,
             @RequestHeader(value = "X-User-Role", required = true) String userRole) {
+
 
         log.info("Evaluando Formato A: id={}, userId={}, role={}, decision={}",
                 id, userId, userRole, request.decision());
