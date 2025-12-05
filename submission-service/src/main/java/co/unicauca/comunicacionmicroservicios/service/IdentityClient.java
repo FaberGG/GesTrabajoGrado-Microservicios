@@ -70,8 +70,12 @@ public class IdentityClient {
             return createDefaultUserInfo(userId);
 
         } catch (WebClientResponseException e) {
-            log.error("Error HTTP al obtener usuario {}: {} - {}",
-                    userId, e.getStatusCode(), e.getMessage());
+            if (e.getStatusCode().value() == 404) {
+                log.warn("⚠️ Usuario {} no encontrado en identity-service (404). Se usarán datos por defecto.", userId);
+            } else {
+                log.error("❌ Error HTTP al obtener usuario {}: {} - {}",
+                        userId, e.getStatusCode(), e.getMessage());
+            }
             return createDefaultUserInfo(userId);
         } catch (Exception e) {
             log.error("Error al obtener usuario {} desde identity-service", userId, e);

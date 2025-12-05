@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -65,12 +66,14 @@ public class FormatoAReviewController {
         }
     }
 
-    @PostMapping("/{id}/evaluar")
+    @PostMapping(value = "/{id}/evaluar", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<EvaluationResultDTO>> evaluar(
             @PathVariable Long id,
             @Valid @RequestBody EvaluateFormatoARequestDTO request,
-            @RequestHeader("X-User-Id") Long userId,
-            @RequestHeader("X-User-Role") String userRole) {
+
+            @RequestHeader(value = "X-User-Id", required = true) Long userId,
+            @RequestHeader(value = "X-User-Role", required = true) String userRole) {
+
 
         log.info("Evaluando Formato A: id={}, userId={}, role={}, decision={}",
                 id, userId, userRole, request.decision());

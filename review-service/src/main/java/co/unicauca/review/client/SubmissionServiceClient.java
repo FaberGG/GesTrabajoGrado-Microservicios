@@ -156,7 +156,8 @@ public class SubmissionServiceClient {
         try {
             webClient.patch()
                     .uri("/api/submissions/formatoA/{id}/estado", formatoAId)
-                    .header("X-Service", "review-service")
+                    .header("X-Service", "review")
+
                     .bodyValue(request)
                     .retrieve()
                     .bodyToMono(Void.class)
@@ -175,7 +176,8 @@ public class SubmissionServiceClient {
         try {
             webClient.patch()
                     .uri("/api/submissions/anteproyectos/{id}/estado", anteproyectoId)
-                    .header("X-Service", "review-service")
+                    .header("X-Service", "review")
+
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(Void.class)

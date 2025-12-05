@@ -34,16 +34,37 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
     protected DocumentInfo fetchDocument(Long documentId) {
         log.debug("Obteniendo información de Formato A con id: {}", documentId);
 
-        // WORKAROUND: El endpoint /formatoA/{id} del submission-service falla con 500
-        // En su lugar, buscamos el formato en el listado /pendientes que SÍ funciona
         try {
+            // Primero intentar obtener directamente por ID
+            log.debug("Intentando obtener Formato A {} directamente por ID...", documentId);
+
+            try {
+                SubmissionServiceClient.FormatoADTO formatoDirecto = submissionClient.getFormatoA(documentId);
+                if (formatoDirecto != null) {
+                    DocumentInfo doc = new DocumentInfo();
+                    doc.setId(formatoDirecto.getId());
+                    doc.setTitulo(formatoDirecto.getTitulo());
+                    doc.setEstado(formatoDirecto.getEstado());
+                    doc.setDocenteDirectorName(formatoDirecto.getDocenteDirectorNombre());
+                    doc.setDocenteDirectorEmail(formatoDirecto.getDocenteDirectorEmail());
+                    doc.setAutoresEmails(formatoDirecto.getEstudiantesEmails() != null ?
+                            formatoDirecto.getEstudiantesEmails() : new ArrayList<>());
+
+                    log.info("✅ Formato A {} obtenido directamente: {}, Estado: {}",
+                            documentId, formatoDirecto.getTitulo(), formatoDirecto.getEstado());
+                    return doc;
+                }
+            } catch (Exception directException) {
+                log.warn("No se pudo obtener Formato A {} directamente, buscando en pendientes: {}",
+                        documentId, directException.getMessage());
+            }
+
+            // Si falla, buscar en el listado de pendientes como fallback
             log.debug("Buscando Formato A {} en el listado de pendientes...", documentId);
 
-            // Buscar en varias páginas hasta encontrarlo
             for (int pageNum = 0; pageNum < 10; pageNum++) {
                 Page<FormatoAReviewDTO> page = submissionClient.getFormatosAPendientes(pageNum, 100);
 
-                // Buscar el formato con el ID solicitado
                 Optional<FormatoAReviewDTO> formatoOpt = page.getContent().stream()
                     .filter(f -> f.formatoAId().equals(documentId))
                     .findFirst();
@@ -64,13 +85,11 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
                     return doc;
                 }
 
-                // Si es la última página, no tiene sentido seguir
                 if (page.isLast()) break;
             }
 
-            // Si no lo encontramos
-            log.error("❌ Formato A {} no encontrado en formatos pendientes", documentId);
-            throw new ResourceNotFoundException("Formato A " + documentId + " no encontrado en formatos pendientes");
+            log.error("❌ Formato A {} no encontrado", documentId);
+            throw new ResourceNotFoundException("Formato A " + documentId + " no encontrado");
 
         } catch (ResourceNotFoundException e) {
             throw e;
@@ -82,11 +101,33 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
 
     @Override
     protected void validateDocumentState(DocumentInfo document) {
-        // Aceptar tanto PENDIENTE como EN_REVISION para evaluación
         String estado = document.getEstado();
-        if (!"EN_REVISION".equals(estado) && !"PENDIENTE".equals(estado)) {
+
+        // Si ya está aprobado o rechazado, informar que ya fue evaluado
+        if ("APROBADO".equals(estado) || "ACEPTADO_POR_COMITE".equals(estado)) {
             throw new InvalidStateException(
-                String.format("Formato A no está en estado evaluable. Estado actual: %s. Se requiere: EN_REVISION o PENDIENTE",
+                String.format("Formato A ya fue APROBADO anteriormente. No se puede evaluar nuevamente. Estado actual: %s",
+                    estado)
+            );
+        }
+
+        if ("RECHAZADO".equals(estado) || "RECHAZADO_POR_COMITE".equals(estado)) {
+            throw new InvalidStateException(
+                String.format("Formato A ya fue RECHAZADO anteriormente. No se puede evaluar nuevamente. Estado actual: %s",
+                    estado)
+            );
+        }
+
+        // Aceptar estados que permiten evaluación: PENDIENTE, EN_REVISION, EN_EVALUACION_COMITE,
+        // FORMATO_A_DILIGENCIADO, PRESENTADO_AL_COORDINADOR
+        if (!"EN_REVISION".equals(estado) &&
+            !"PENDIENTE".equals(estado) &&
+            !"EN_EVALUACION_COMITE".equals(estado) &&
+            !"FORMATO_A_DILIGENCIADO".equals(estado) &&
+            !"PRESENTADO_AL_COORDINADOR".equals(estado) &&
+            !"CORRECCIONES_COMITE".equals(estado)) {
+            throw new InvalidStateException(
+                String.format("Formato A no está en estado evaluable. Estado actual: %s. Estados válidos: PENDIENTE, EN_REVISION, EN_EVALUACION_COMITE, FORMATO_A_DILIGENCIADO, PRESENTADO_AL_COORDINADOR, CORRECCIONES_COMITE",
                     estado)
             );
         }
@@ -100,7 +141,7 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
         EvaluacionRequest request = new EvaluacionRequest(
             decision.name(),
             obs != null ? obs : "",
-            evaluatorId
+            evaluatorId != null ? evaluatorId.longValue() : null
         );
 
         log.debug("Enviando EvaluacionRequest: {}", request);

@@ -262,6 +262,8 @@ public class SubmissionService implements ISubmissionService {
         ProyectoSubmission guardado = submissionRepository.save(proyecto);
         log.info("✅ Proyecto creado con ID: {}", guardado.getId());
 
+        // TODO: Descomentar cuando los eventos estén correctamente implementados
+        /*
         // 5. Obtener información del usuario responsable desde Identity Service
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
 
@@ -284,6 +286,7 @@ public class SubmissionService implements ISubmissionService {
                 .build();
 
         progressEventPublisher.publicarFormatoAEnviado(event);
+        */
 
         // 8. Retornar respuesta
         return new IdResponse(guardado.getId());
@@ -291,8 +294,14 @@ public class SubmissionService implements ISubmissionService {
 
     @Override
     public FormatoAView obtenerFormatoA(Long id) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método obtenerFormatoA aún no implementado");
+        log.info("📋 Obteniendo Formato A por ID: {}", id);
+
+        ProyectoSubmission proyecto = submissionRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Formato A no encontrado: " + id));
+
+        FormatoAView view = convertirProyectoAFormatoAView(proyecto);
+        log.info("✅ Formato A {} encontrado: {}", id, proyecto.getTitulo());
+        return view;
     }
 
     @Override
@@ -433,6 +442,8 @@ public class SubmissionService implements ISubmissionService {
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
         log.info("✅ Formato A reenviado - Intento: {}/3", actualizado.getNumeroIntentos());
 
+        // TODO: Descomentar cuando los eventos estén correctamente implementados
+        /*
         // 9. Obtener información del usuario
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
 
@@ -448,6 +459,7 @@ public class SubmissionService implements ISubmissionService {
                 .build();
 
         progressEventPublisher.publicarFormatoAReenviado(event);
+        */
 
         // 11. Retornar respuesta
         return new IdResponse(actualizado.getId());
@@ -455,8 +467,53 @@ public class SubmissionService implements ISubmissionService {
 
     @Override
     public void cambiarEstadoFormatoA(Long versionId, EvaluacionRequest req) {
-        // TODO: Implementar lógica completa
-        throw new UnsupportedOperationException("Método cambiarEstadoFormatoA aún no implementado");
+        log.info("📝 Cambiando estado de Formato A (versionId: {}) a: {} por evaluador: {}",
+                 versionId, req.getEstado(), req.getEvaluadoPor());
+
+        // 1. Buscar el proyecto por ID (versionId es el proyectoId en este contexto)
+        ProyectoSubmission proyecto = submissionRepository.findById(versionId)
+                .orElseThrow(() -> new IllegalArgumentException("Formato A no encontrado: " + versionId));
+
+        // 2. Obtener estado actual
+        String estadoActual = proyecto.getEstadoNombre();
+        log.debug("Estado actual del proyecto: {}", estadoActual);
+
+        // 3. Realizar transiciones automáticas si es necesario para llegar a un estado evaluable
+        // El flujo normal es: FORMATO_A_DILIGENCIADO -> PRESENTADO_AL_COORDINADOR -> EN_EVALUACION_COMITE -> EVALUADO
+        try {
+            if ("FORMATO_A_DILIGENCIADO".equals(estadoActual)) {
+                log.info("🔄 Transición automática: FORMATO_A_DILIGENCIADO -> PRESENTADO_AL_COORDINADOR");
+                proyecto.presentarAlCoordinador();
+                estadoActual = proyecto.getEstadoNombre();
+            }
+
+            if ("PRESENTADO_AL_COORDINADOR".equals(estadoActual)) {
+                log.info("🔄 Transición automática: PRESENTADO_AL_COORDINADOR -> EN_EVALUACION_COMITE");
+                proyecto.enviarAComite();
+                estadoActual = proyecto.getEstadoNombre();
+            }
+
+            // 4. Determinar si fue aprobado o rechazado
+            boolean aprobado = "APROBADO".equalsIgnoreCase(req.getEstado());
+            String observaciones = req.getObservaciones() != null ? req.getObservaciones() : "";
+
+            // 5. Ahora sí evaluar (debería estar en EN_EVALUACION_COMITE)
+            log.info("📋 Evaluando proyecto desde estado: {}", estadoActual);
+            proyecto.evaluar(aprobado, observaciones);
+
+            // 6. Actualizar fecha de modificación
+            proyecto.setFechaUltimaModificacion(LocalDateTime.now());
+
+            // 7. Persistir cambios
+            submissionRepository.save(proyecto);
+
+            log.info("✅ Estado de Formato A {} actualizado exitosamente a: {}",
+                     versionId, proyecto.getEstadoNombre());
+
+        } catch (IllegalStateException e) {
+            log.error("❌ Error al cambiar estado del Formato A {}: {}", versionId, e.getMessage());
+            throw new IllegalStateException("No se puede cambiar el estado del Formato A: " + e.getMessage());
+        }
     }
 
     @Override
@@ -496,6 +553,8 @@ public class SubmissionService implements ISubmissionService {
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
         log.info("✅ Anteproyecto subido para proyecto: {}", actualizado.getId());
 
+        // TODO: Descomentar cuando los eventos estén correctamente implementados
+        /*
         // 8. Obtener información del usuario
         IdentityClient.UserBasicInfo userInfo = identityClient.getUserById(Long.valueOf(userId));
 
@@ -510,6 +569,7 @@ public class SubmissionService implements ISubmissionService {
                 .build();
 
         progressEventPublisher.publicarAnteproyectoEnviado(event);
+        */
 
         // 10. Retornar respuesta
         return new IdResponse(actualizado.getId());
