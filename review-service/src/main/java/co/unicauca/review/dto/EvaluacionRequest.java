@@ -4,22 +4,23 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * DTO para enviar la evaluación al submission-service.
- * Debe coincidir exactamente con EvaluacionRequest del submission-service.
+ * IMPORTANTE: El campo 'estado' debe enviarse como String con los valores:
+ * "APROBADO" o "RECHAZADO" que el Submission Service convertirá a su enum.
  */
 public class EvaluacionRequest {
 
     @JsonProperty("estado")
-    private String estado; // "APROBADO" o "RECHAZADO" - será convertido al enum en el submission-service
+    private String estado; // "APROBADO" o "RECHAZADO"
 
     @JsonProperty("observaciones")
     private String observaciones;
 
     @JsonProperty("evaluadoPor")
-    private Integer evaluadoPor;
+    private Long evaluadoPor; // Cambio de Integer a Long para consistencia
 
     public EvaluacionRequest() {}
 
-    public EvaluacionRequest(String estado, String observaciones, Integer evaluadoPor) {
+    public EvaluacionRequest(String estado, String observaciones, Long evaluadoPor) {
         this.estado = estado;
         this.observaciones = observaciones;
         this.evaluadoPor = evaluadoPor;
@@ -42,11 +43,11 @@ public class EvaluacionRequest {
         this.observaciones = observaciones;
     }
 
-    public Integer getEvaluadoPor() {
+    public Long getEvaluadoPor() {
         return evaluadoPor;
     }
 
-    public void setEvaluadoPor(Integer evaluadoPor) {
+    public void setEvaluadoPor(Long evaluadoPor) {
         this.evaluadoPor = evaluadoPor;
     }
 
@@ -59,4 +60,3 @@ public class EvaluacionRequest {
                 '}';
     }
 }
-

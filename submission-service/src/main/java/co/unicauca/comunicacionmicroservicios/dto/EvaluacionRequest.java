@@ -7,20 +7,29 @@ import jakarta.validation.constraints.*;
 public class EvaluacionRequest {
 
     @NotNull
-    private enumEstadoFormato estado; // APROBADO | RECHAZADO
+    @Pattern(regexp = "APROBADO|RECHAZADO", message = "El estado debe ser APROBADO o RECHAZADO")
+    private String estado; // "APROBADO" | "RECHAZADO" - Cambiado a String para compatibilidad
 
     @Size(max = 2000)
     private String observaciones;
 
     @NotNull
-    private Integer evaluadoPor; // coordinadorId
+    private Long evaluadoPor; // coordinadorId - Cambiado a Long para compatibilidad
 
-    public enumEstadoFormato getEstado() { return estado; }
-    public void setEstado(enumEstadoFormato estado) { this.estado = estado; }
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+
+    /**
+     * Convierte el estado String a enum para uso interno
+     */
+    public enumEstadoFormato getEstadoAsEnum() {
+        if (estado == null) return null;
+        return enumEstadoFormato.valueOf(estado.toUpperCase());
+    }
 
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
 
-    public Integer getEvaluadoPor() { return evaluadoPor; }
-    public void setEvaluadoPor(Integer evaluadoPor) { this.evaluadoPor = evaluadoPor; }
+    public Long getEvaluadoPor() { return evaluadoPor; }
+    public void setEvaluadoPor(Long evaluadoPor) { this.evaluadoPor = evaluadoPor; }
 }
