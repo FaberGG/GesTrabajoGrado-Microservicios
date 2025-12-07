@@ -61,7 +61,8 @@ springdoc:
     operations-sorter: alpha
     doc-expansion: none
     display-request-duration: true
-  show-actuator: true
+  packages-to-scan: co.unicauca.comunicacionmicroservicios.controller
+  show-actuator: false
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
 
@@ -132,19 +133,4 @@ management:
       prometheus:
         enabled: true
 
-# Swagger/OpenAPI Configuration
-springdoc:
-  api-docs:
-    path: /api-docs
-    enabled: true
-  swagger-ui:
-    enabled: true
-    tags-sorter: alpha
-    operations-sorter: alpha
-    doc-expansion: none
-    display-request-duration: true
-  packages-to-scan: co.unicauca.comunicacionmicroservicios.controller
-  show-actuator: false
-  default-produces-media-type: application/json
-  default-consumes-media-type: application/json
 
