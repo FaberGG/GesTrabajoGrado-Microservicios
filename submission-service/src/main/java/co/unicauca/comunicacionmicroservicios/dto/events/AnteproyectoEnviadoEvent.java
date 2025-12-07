@@ -97,6 +97,11 @@ public class AnteproyectoEnviadoEvent {
     private String estudiante1Nombre;
 
     /**
+     * Email del estudiante 1
+     */
+    private String estudiante1Email;
+
+    /**
      * ID del estudiante 2 (opcional)
      */
     private Long estudiante2Id;
@@ -105,5 +110,10 @@ public class AnteproyectoEnviadoEvent {
      * Nombre completo del estudiante 2 (opcional)
      */
     private String estudiante2Nombre;
+
+    /**
+     * Email del estudiante 2 (opcional)
+     */
+    private String estudiante2Email;
 }
 

@@ -297,10 +297,14 @@ public class SubmissionService implements ISubmissionService {
 
         // 6. Obtener programa del estudiante (manejo seguro de nulls)
         String programa = "DESCONOCIDO";
+        String estudiante1Nombre = null;
+        String estudiante1Email = null;
         try {
             IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(Long.valueOf(data.getEstudiante1Id()));
             if (estudianteInfo != null && estudianteInfo.programa() != null) {
                 programa = estudianteInfo.programa();
+                estudiante1Nombre = estudianteInfo.getNombreCompleto();
+                estudiante1Email = estudianteInfo.email();
                 log.info("✅ Programa del estudiante obtenido: {}", programa);
             } else {
                 log.warn("⚠️ No se pudo obtener el programa del estudiante {}, usando valor por defecto", data.getEstudiante1Id());
@@ -309,7 +313,37 @@ public class SubmissionService implements ISubmissionService {
             log.error("❌ Error al obtener programa del estudiante {}, usando valor por defecto", data.getEstudiante1Id(), e);
         }
 
-        // 7. Publicar evento a Progress Tracking (NUEVO)
+        // 6.1. Obtener información completa del estudiante 2 (si existe)
+        String estudiante2Nombre = null;
+        String estudiante2Email = null;
+        if (data.getEstudiante2Id() != null) {
+            try {
+                IdentityClient.UserBasicInfo est2Info = identityClient.getUserById(Long.valueOf(data.getEstudiante2Id()));
+                if (est2Info != null) {
+                    estudiante2Nombre = est2Info.getNombreCompleto();
+                    estudiante2Email = est2Info.email();
+                    log.info("✅ Información del estudiante 2 obtenida: {}", estudiante2Nombre);
+                }
+            } catch (Exception e) {
+                log.error("❌ Error al obtener información del estudiante 2: {}", data.getEstudiante2Id(), e);
+            }
+        }
+
+        // 6.2. Obtener información del co-director (si existe)
+        String codirectorNombre = null;
+        if (guardado.getDocenteCodirectorId() != null) {
+            try {
+                IdentityClient.UserBasicInfo codirInfo = identityClient.getUserById(guardado.getDocenteCodirectorId());
+                if (codirInfo != null) {
+                    codirectorNombre = codirInfo.getNombreCompleto();
+                    log.info("✅ Información del co-director obtenida: {}", codirectorNombre);
+                }
+            } catch (Exception e) {
+                log.error("❌ Error al obtener información del co-director: {}", guardado.getDocenteCodirectorId(), e);
+            }
+        }
+
+        // 7. Publicar evento a Progress Tracking con información completa
         FormatoAEnviadoEvent event = FormatoAEnviadoEvent.builder()
                 .proyectoId(guardado.getId())
                 .titulo(guardado.getTitulo())
@@ -321,6 +355,17 @@ public class SubmissionService implements ISubmissionService {
                 .usuarioResponsableId(Long.valueOf(userId))
                 .usuarioResponsableNombre(userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO")
                 .usuarioResponsableRol("DOCENTE")
+                // ✨ Información completa del proyecto
+                .directorId(guardado.getDocenteDirectorId())
+                .directorNombre(userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO")
+                .codirectorId(guardado.getDocenteCodirectorId())
+                .codirectorNombre(codirectorNombre)
+                .estudiante1Id(guardado.getEstudiante1Id())
+                .estudiante1Nombre(estudiante1Nombre)
+                .estudiante1Email(estudiante1Email)
+                .estudiante2Id(guardado.getEstudiante2Id())
+                .estudiante2Nombre(estudiante2Nombre)
+                .estudiante2Email(estudiante2Email)
                 .build();
 
         log.info("📤 Publicando evento FormatoAEnviado para proyecto: {}", guardado.getId());
@@ -439,13 +484,22 @@ public class SubmissionService implements ISubmissionService {
 
         // Obtener información del estudiante desde Identity Service
         List<String> estudiantesEmails = new java.util.ArrayList<>();
-        if (proyecto.getEstudianteId() != null) {
+        if (proyecto.getEstudiante1Id() != null) {
             try {
-                IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(proyecto.getEstudianteId());
+                IdentityClient.UserBasicInfo estudianteInfo = identityClient.getUserById(proyecto.getEstudiante1Id());
                 estudiantesEmails.add(estudianteInfo.email());
             } catch (Exception e) {
-                log.warn("No se pudo obtener información del estudiante {}: {}", proyecto.getEstudianteId(), e.getMessage());
-                estudiantesEmails.add("estudiante." + proyecto.getEstudianteId() + "@unicauca.edu.co");
+                log.warn("No se pudo obtener información del estudiante 1 {}: {}", proyecto.getEstudiante1Id(), e.getMessage());
+                estudiantesEmails.add("estudiante." + proyecto.getEstudiante1Id() + "@unicauca.edu.co");
+            }
+        }
+        if (proyecto.getEstudiante2Id() != null) {
+            try {
+                IdentityClient.UserBasicInfo estudiante2Info = identityClient.getUserById(proyecto.getEstudiante2Id());
+                estudiantesEmails.add(estudiante2Info.email());
+            } catch (Exception e) {
+                log.warn("No se pudo obtener información del estudiante 2 {}: {}", proyecto.getEstudiante2Id(), e.getMessage());
+                estudiantesEmails.add("estudiante." + proyecto.getEstudiante2Id() + "@unicauca.edu.co");
             }
         }
         view.setEstudiantesEmails(estudiantesEmails);
@@ -512,29 +566,42 @@ public class SubmissionService implements ISubmissionService {
             codirectorNombre = codirectorInfo != null ? codirectorInfo.getNombreCompleto() : "Codirector Desconocido";
         }
 
-        // 12. Obtener información completa del estudiante 1 (incluyendo programa)
+        // 12. Obtener información completa del estudiante 1 (incluyendo programa y email)
         IdentityClient.UserBasicInfo estudiante1Info = identityClient.getUserById(actualizado.getEstudiante1Id());
         String estudiante1Nombre = estudiante1Info != null ? estudiante1Info.getNombreCompleto() : "Estudiante Desconocido";
+        String estudiante1Email = estudiante1Info != null ? estudiante1Info.email() : null;
         String programa = "DESCONOCIDO";
         if (estudiante1Info != null && estudiante1Info.programa() != null) {
             programa = estudiante1Info.programa();
         }
 
-        // 13. Verificar si hay segundo estudiante (el modelo actual solo tiene estudianteId, no estudiante2Id)
-        // Por ahora dejamos estos campos como null hasta que el modelo se actualice
+        // 13. Obtener información completa del estudiante 2 (si existe)
         String estudiante2Nombre = null;
-        Long estudiante2Id = null;
+        String estudiante2Email = null;
+        Long estudiante2Id = actualizado.getEstudiante2Id();
+        if (estudiante2Id != null) {
+            try {
+                IdentityClient.UserBasicInfo est2Info = identityClient.getUserById(estudiante2Id);
+                if (est2Info != null) {
+                    estudiante2Nombre = est2Info.getNombreCompleto();
+                    estudiante2Email = est2Info.email();
+                    log.info("✅ Información del estudiante 2 obtenida: {}", estudiante2Nombre);
+                }
+            } catch (Exception e) {
+                log.error("❌ Error al obtener información del estudiante 2: {}", estudiante2Id, e);
+            }
+        }
 
         // 14. Publicar evento a Progress Tracking con información completa
         FormatoAReenviadoEvent event = FormatoAReenviadoEvent.builder()
                 .proyectoId(actualizado.getId())
+                .titulo(actualizado.getTitulo())
                 .version(actualizado.getNumeroIntentos())
                 .descripcion("Correcciones aplicadas - versión " + actualizado.getNumeroIntentos())
                 .timestamp(LocalDateTime.now())
                 .usuarioResponsableId(Long.valueOf(userId))
                 .usuarioResponsableNombre(userInfo != null ? userInfo.getNombreCompleto() : "DESCONOCIDO")
                 .usuarioResponsableRol("DOCENTE")
-
                 // ✨ Información completa del proyecto
                 .directorId(actualizado.getDocenteDirectorId())
                 .directorNombre(directorNombre)
@@ -542,7 +609,10 @@ public class SubmissionService implements ISubmissionService {
                 .codirectorNombre(codirectorNombre)
                 .estudiante1Id(actualizado.getEstudiante1Id())
                 .estudiante1Nombre(estudiante1Nombre)
+                .estudiante1Email(estudiante1Email)
                 .estudiante2Id(estudiante2Id)
+                .estudiante2Nombre(estudiante2Nombre)
+                .estudiante2Email(estudiante2Email)
                 .build();
 
         log.info("📤 Publicando evento FormatoAReenviado para proyecto: {} versión: {}",
@@ -585,16 +655,17 @@ public class SubmissionService implements ISubmissionService {
                 proyecto.getId(), proyecto.getEstadoNombre(), proyecto.getNumeroIntentos());
 
         // Validar que el proyecto está en un estado evaluable
-        if (!"EN_EVALUACION_COMITE".equals(proyecto.getEstadoNombre())) {
+        String estadoActual = proyecto.getEstadoNombre();
+        if (!"EN_EVALUACION_COMITE".equals(estadoActual)) {
             log.warn("⚠️ El proyecto no está en estado EN_EVALUACION_COMITE. Estado actual: {}",
-                    proyecto.getEstadoNombre());
+                    estadoActual);
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "El proyecto no está en evaluación. Estado actual: " + proyecto.getEstadoNombre());
+                    "El proyecto no está en evaluación. Estado actual: " + estadoActual);
         }
 
         // Evaluar según la decisión (puede venir como enum o string)
-        boolean aprobado = req.getEstado() == co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.APROBADO;
+        boolean aprobado = req.getEstadoAsEnum() == co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.APROBADO;
         String observaciones = req.getObservaciones() != null ? req.getObservaciones() : "";
 
         // Delegar al patrón State para manejar la transición
@@ -743,13 +814,31 @@ public class SubmissionService implements ISubmissionService {
 
         // 13. Obtener información del estudiante 2 (si existe)
         String estudiante2Nombre = null;
+        String estudiante2Email = null;
         if (proyecto.getEstudiante2Id() != null) {
             IdentityClient.UserBasicInfo estudiante2Info = identityClient.getUserById(proyecto.getEstudiante2Id().longValue());
-            estudiante2Nombre = estudiante2Info != null ? estudiante2Info.getNombreCompleto() : "Estudiante 2 Desconocido";
-            log.info("✅ Estudiante 2 obtenido: {}", estudiante2Nombre);
+            if (estudiante2Info != null) {
+                estudiante2Nombre = estudiante2Info.getNombreCompleto();
+                estudiante2Email = estudiante2Info.email();
+                log.info("✅ Estudiante 2 obtenido: {} - Email: {}", estudiante2Nombre, estudiante2Email);
+            }
         }
 
-        // 14. Publicar evento a Progress Tracking con TODOS los campos
+        // 13.1. Obtener email del estudiante 1 (ya tenemos el nombre y programa)
+        String estudiante1Email = null;
+        if (proyecto.getEstudiante1Id() != null) {
+            try {
+                IdentityClient.UserBasicInfo est1Info = identityClient.getUserById(proyecto.getEstudiante1Id().longValue());
+                if (est1Info != null) {
+                    estudiante1Email = est1Info.email();
+                    log.info("✅ Email del estudiante 1 obtenido: {}", estudiante1Email);
+                }
+            } catch (Exception e) {
+                log.error("❌ Error al obtener email del estudiante 1: {}", proyecto.getEstudiante1Id(), e);
+            }
+        }
+
+        // 14. Publicar evento a Progress Tracking con TODOS los campos incluyendo emails
         AnteproyectoEnviadoEvent event = AnteproyectoEnviadoEvent.builder()
                 .proyectoId(proyecto.getId().longValue())
                 .titulo(proyecto.getTitulo())
@@ -767,8 +856,10 @@ public class SubmissionService implements ISubmissionService {
                 .codirectorNombre(codirectorNombre)
                 .estudiante1Id(proyecto.getEstudiante1Id() != null ? proyecto.getEstudiante1Id().longValue() : null)
                 .estudiante1Nombre(estudiante1Nombre)
+                .estudiante1Email(estudiante1Email)
                 .estudiante2Id(proyecto.getEstudiante2Id() != null ? proyecto.getEstudiante2Id().longValue() : null)
                 .estudiante2Nombre(estudiante2Nombre)
+                .estudiante2Email(estudiante2Email)
                 .build();
 
         log.info("📤 Publicando evento AnteproyectoEnviado para proyecto: {}", proyecto.getId());

@@ -31,37 +31,37 @@ public class ProyectoSubmission {
     @Column(nullable = false)
     private enumModalidad modalidad;
 
-    @Column(nullable = false)
+    @Column(name = "fecha_creacion", nullable = false)
     private LocalDateTime fechaCreacion;
 
-    @Column
+    @Column(name = "fecha_ultima_modificacion")
     private LocalDateTime fechaUltimaModificacion;
 
     // IDs de los actores involucrados
     @NotNull
-    @Column(nullable = false)
+    @Column(name = "docente_director_id", nullable = false)
     private Long docenteDirectorId;
 
-    @Column
+    @Column(name = "docente_codirector_id")
     private Long docenteCodirectorId;
 
     // ✨ SOPORTE PARA 2 ESTUDIANTES
     @NotNull(message = "Al menos un estudiante es obligatorio")
-    @Column(nullable = false)
+    @Column(name = "estudiante_1_id", nullable = false)
     private Long estudiante1Id;
 
-    @Column
+    @Column(name = "estudiante_2_id")
     private Long estudiante2Id; // Opcional
 
     // Objetivos del proyecto
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "objetivo_general", columnDefinition = "TEXT")
     private String objetivoGeneral;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "objetivos_especificos", columnDefinition = "TEXT")
     private String objetivosEspecificos;
 
     // Estado del proceso (persistido como String en BD)
-    @Column(nullable = false, length = 50)
+    @Column(name = "estado_nombre", nullable = false, length = 50)
     private String estadoNombre;
 
     // Estado actual (patrón State - no persistido, se reconstruye)
@@ -69,19 +69,19 @@ public class ProyectoSubmission {
     private IEstadoSubmission estadoActual;
 
     // Número de intentos de evaluación
-    @Column(nullable = false)
+    @Column(name = "numero_intentos", nullable = false)
     private Integer numeroIntentos = 0;
 
     // Comentarios del comité
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "comentarios_comite", columnDefinition = "TEXT")
     private String comentariosComite;
 
     // Ruta del archivo del Formato A
-    @Column
+    @Column(name = "ruta_formatoa")
     private String rutaFormatoA;
 
     // Ruta del archivo de carta (si aplica)
-    @Column
+    @Column(name = "ruta_carta")
     private String rutaCarta;
 
     // Constructor por defecto
