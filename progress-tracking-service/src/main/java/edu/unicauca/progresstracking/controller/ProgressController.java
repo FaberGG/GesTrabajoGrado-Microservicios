@@ -244,10 +244,12 @@ public class ProgressController {
     ) {
         log.info("👨‍🎓 Consultando historial del estudiante: {} (page={}, size={})", estudianteId, page, size);
 
-        // Buscar el proyecto del estudiante
-        Optional<ProyectoEstado> proyectoOpt = proyectoEstadoRepository.findByEstudianteId(estudianteId);
+        // Buscar el proyecto más reciente del estudiante
+        // La consulta retorna lista ordenada por fecha de actualización (más reciente primero)
+        List<ProyectoEstado> proyectos = proyectoEstadoRepository.findByEstudianteId(estudianteId);
 
-        if (proyectoOpt.isEmpty()) {
+        if (proyectos.isEmpty()) {
+            log.warn("⚠️ Estudiante {} no tiene proyectos asignados", estudianteId);
             return ResponseEntity.ok(Map.of(
                     "error", false,
                     "mensaje", "El estudiante no tiene proyectos asignados actualmente",
@@ -257,8 +259,17 @@ public class ProgressController {
             ));
         }
 
-        ProyectoEstado proyecto = proyectoOpt.get();
+        // Tomar el primer proyecto (el más reciente según ORDER BY)
+        ProyectoEstado proyecto = proyectos.get(0);
         Long proyectoId = proyecto.getProyectoId();
+
+        // Log adicional para debugging
+        if (proyectos.size() > 1) {
+            log.warn("⚠️ Estudiante {} tiene {} proyectos. Retornando el más reciente (ID: {}, última actualización: {})",
+                    estudianteId, proyectos.size(), proyectoId, proyecto.getUltimaActualizacion());
+        } else {
+            log.info("✅ Proyecto encontrado para estudiante {}: ID={}", estudianteId, proyectoId);
+        }
 
         // Obtener historial del proyecto
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "fecha"));
@@ -325,10 +336,10 @@ public class ProgressController {
     ) {
         log.info("👨‍🎓 Consultando estado del proyecto del estudiante: {}", estudianteId);
 
-        // Buscar el proyecto del estudiante
-        Optional<ProyectoEstado> proyectoOpt = proyectoEstadoRepository.findByEstudianteId(estudianteId);
+        // Buscar el proyecto más reciente del estudiante
+        List<ProyectoEstado> proyectos = proyectoEstadoRepository.findByEstudianteId(estudianteId);
 
-        if (proyectoOpt.isEmpty()) {
+        if (proyectos.isEmpty()) {
             return ResponseEntity.ok(Map.of(
                     "error", false,
                     "mensaje", "El estudiante no tiene proyectos asignados actualmente",
@@ -337,7 +348,13 @@ public class ProgressController {
             ));
         }
 
-        ProyectoEstado estado = proyectoOpt.get();
+        // Tomar el primer proyecto (el más reciente según ORDER BY)
+        ProyectoEstado estado = proyectos.get(0);
+
+        if (proyectos.size() > 1) {
+            log.warn("⚠️ Estudiante {} tiene {} proyectos. Mostrando el más reciente (ID: {})",
+                    estudianteId, proyectos.size(), estado.getProyectoId());
+        }
 
         // Construir respuesta enriquecida
         Map<String, Object> response = new HashMap<>();

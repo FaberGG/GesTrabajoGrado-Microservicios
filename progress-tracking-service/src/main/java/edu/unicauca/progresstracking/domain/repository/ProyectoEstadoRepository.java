@@ -21,10 +21,22 @@ public interface ProyectoEstadoRepository extends JpaRepository<ProyectoEstado, 
     List<ProyectoEstado> findProyectosByUsuario(@Param("userId") Long userId);
 
     /**
-     * Buscar proyecto por ID de estudiante
+     * Buscar proyecto más reciente por ID de estudiante
+     * Retorna el último proyecto ordenado por fecha de última actualización (más reciente primero)
+     * Esto garantiza que si un estudiante está en múltiples proyectos (caso excepcional),
+     * se retorne el proyecto activo/más reciente
+     *
+     * NOTA: Retorna List para evitar NonUniqueResultException. El controlador toma el primer elemento.
      */
-    @Query("SELECT p FROM ProyectoEstado p WHERE p.estudiante1Id = :estudianteId OR p.estudiante2Id = :estudianteId")
-    Optional<ProyectoEstado> findByEstudianteId(@Param("estudianteId") Long estudianteId);
+    @Query("SELECT p FROM ProyectoEstado p WHERE p.estudiante1Id = :estudianteId OR p.estudiante2Id = :estudianteId ORDER BY p.ultimaActualizacion DESC")
+    List<ProyectoEstado> findByEstudianteId(@Param("estudianteId") Long estudianteId);
+
+    /**
+     * Buscar todos los proyectos de un estudiante (ordenados por más reciente)
+     * Útil para casos excepcionales donde se necesita ver el historial completo
+     */
+    @Query("SELECT p FROM ProyectoEstado p WHERE p.estudiante1Id = :estudianteId OR p.estudiante2Id = :estudianteId ORDER BY p.ultimaActualizacion DESC")
+    List<ProyectoEstado> findAllByEstudianteId(@Param("estudianteId") Long estudianteId);
 
     /**
      * Buscar proyectos por estado actual
