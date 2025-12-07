@@ -1,19 +1,62 @@
 # 🎓 Sistema de Gestión de Trabajo de Grado - Microservicios
 
-Sistema completo basado en microservicios para la gestión de trabajos de grado, construido con Spring Boot y arquitectura de microservicios.
+Sistema completo basado en microservicios para la gestión de trabajos de grado, construido con Spring Boot, arquitectura Event-Driven y patrón CQRS.
 
 ## 📋 Arquitectura
 
 El sistema está compuesto por los siguientes servicios:
 
+### Microservicios de Negocio
+
 - **Gateway Service** (Puerto 8080): Punto de entrada único, enrutamiento y autenticación
-- **Identity Service** (Puerto 8081): Gestión de usuarios y autenticación JWT
-- **Submission Service** (Puerto 8082): Gestión de entregas y documentos
-- **Notification Service** (Puerto 8083): Envío de notificaciones y emails
-- **Review Service** (Puerto 8084): Evaluación de Formato A y Anteproyectos
-- **Progress Tracking Service** (Puerto 8085): Seguimiento del estado de proyectos
-- **RabbitMQ** (Puertos 5672, 15672): Message broker para comunicación asíncrona
+- **Identity Service** (Puerto 8081): Gestión de usuarios, roles y autenticación JWT
+- **Submission Service** (Puerto 8082): Gestión de Formato A, Anteproyectos y documentos
+- **Review Service** (Puerto 8084): Evaluación de Formato A y Anteproyectos por coordinadores y evaluadores
+- **Notification Service** (Puerto 8083): Envío de notificaciones por email y sistema
+- **Progress Tracking Service** (Puerto 8085): **Seguimiento del estado de proyectos (CQRS Read Model)**
+
+### Infraestructura
+
+- **RabbitMQ** (Puertos 5672, 15672): Message broker para comunicación asíncrona entre microservicios
 - **PostgreSQL**: Bases de datos independientes para cada servicio
+
+### Patrón Arquitectónico: Event-Driven + CQRS
+
+El sistema utiliza **Event-Driven Architecture** con patrón **CQRS** (Command Query Responsibility Segregation):
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│  Submission     │         │     Review      │
+│   Service       │         │    Service      │
+│  (Commands)     │         │   (Commands)    │
+└────────┬────────┘         └────────┬────────┘
+         │                           │
+         │ Publica eventos           │
+         └─────────┬─────────────────┘
+                   │
+                   ▼
+           ┌──────────────┐
+           │   RabbitMQ   │
+           │ (Event Bus)  │
+           └──────────────┘
+                   │
+         ┌─────────┴─────────┐
+         │                   │
+         ▼                   ▼
+┌─────────────────┐   ┌─────────────────┐
+│ Notification    │   │ Progress        │
+│   Service       │   │  Tracking       │
+│  (Consumer)     │   │   Service       │
+│                 │   │ (Read Model)    │
+└─────────────────┘   └─────────────────┘
+```
+
+**Beneficios:**
+- ✅ Desacoplamiento entre servicios
+- ✅ Historial completo de eventos (Event Sourcing)
+- ✅ Vistas optimizadas para consultas
+- ✅ Auditoría y trazabilidad completa
+- ✅ Escalabilidad independiente
 
 ## 🚀 Inicio Rápido con Docker Compose
 
@@ -280,7 +323,162 @@ GesTrabajoGrado-Microservicios/
 - Submissions: `http://localhost:8080/api/submissions/*`
 - Notifications: `http://localhost:8080/api/notifications/*`
 - Reviews: `http://localhost:8080/api/reviews/*`
-- Progress Tracking: `http://localhost:8080/api/progress-tracking/*`
+- Progress Tracking: `http://localhost:8080/api/progress/*`
+
+### Endpoints Directos (Desarrollo):
+- Identity: http://localhost:8081/api/identity/*
+- Submission: http://localhost:8082/api/submissions/*
+- Notification: http://localhost:8083/api/notifications/*
+- Review: http://localhost:8084/api/reviews/*
+- Progress: http://localhost:8085/api/progress/*
+
+## 🎯 Progress Tracking Service (CQRS Read Model)
+
+El **Progress Tracking Service** es un componente clave que implementa el patrón **CQRS Read Model** para consultas optimizadas del estado de proyectos.
+
+### Características Principales
+
+- ✅ **Event Sourcing**: Guarda historial completo de todos los eventos
+- ✅ **Vista Materializada**: Estado actual pre-calculado para consultas rápidas
+- ✅ **Solo Lectura**: APIs REST únicamente de consulta (GET)
+- ✅ **Auditoría Completa**: Registro inmutable de todos los cambios
+- ✅ **Información de Participantes**: Director, codirector, estudiantes, evaluadores
+
+### Eventos Consumidos
+
+| Evento | Origen | Efecto |
+|--------|--------|--------|
+| `formato-a.enviado` | submission-service | Registra primera versión de Formato A |
+| `formato-a.reenviado` | submission-service | Registra versión 2 o 3 de Formato A |
+| `formatoa.evaluado` | review-service | Actualiza resultado de evaluación |
+| `anteproyecto.enviado` | submission-service | Registra envío de anteproyecto |
+| `evaluadores.asignados` | review-service | Registra asignación de evaluadores |
+| `anteproyecto.evaluado` | review-service | Actualiza resultado de evaluación |
+
+### Endpoints de Consulta
+
+```bash
+# Obtener estado actual del proyecto
+GET /api/progress/proyectos/{id}/estado
+
+# Obtener historial completo de eventos
+GET /api/progress/proyectos/{id}/historial
+
+# Obtener proyectos del usuario autenticado (director/estudiante)
+GET /api/progress/proyectos/mis-proyectos
+Headers: X-User-Id, X-User-Role
+
+# Obtener historial del proyecto de un estudiante
+GET /api/progress/estudiantes/{estudianteId}/historial
+
+# Health check
+GET /api/progress/health
+```
+
+### Ejemplo de Respuesta - Estado del Proyecto
+
+```json
+{
+  "proyectoId": 123,
+  "titulo": "Sistema de IA para análisis de datos educativos",
+  "modalidad": "DUPLA",
+  "programa": "INGENIERIA_SISTEMAS",
+  "estadoActual": "ANTEPROYECTO_EN_EVALUACION",
+  "estadoLegible": "Anteproyecto en evaluación",
+  "siguientePaso": "Esperar evaluación de evaluadores",
+  "fase": "ANTEPROYECTO",
+  "participantes": {
+    "director": {
+      "id": 12,
+      "nombre": "Dr. Juan Pérez"
+    },
+    "codirector": {
+      "id": 15,
+      "nombre": "Dra. Ana Martínez"
+    },
+    "estudiante1": {
+      "id": 1001,
+      "nombre": "María García López",
+      "email": "maria.garcia@unicauca.edu.co"
+    },
+    "estudiante2": {
+      "id": 1002,
+      "nombre": "Carlos López Ramírez",
+      "email": "carlos.lopez@unicauca.edu.co"
+    }
+  },
+  "formatoA": {
+    "version": 2,
+    "intentoActual": 2,
+    "estado": "APROBADO"
+  },
+  "anteproyecto": {
+    "estado": "EN_EVALUACION",
+    "evaluadoresAsignados": true
+  },
+  "ultimaActualizacion": "2025-12-06T18:30:00"
+}
+```
+
+### Modelo de Datos
+
+**Tabla: `historial_eventos`** (Event Store)
+- Registro inmutable de todos los eventos
+- Campos: proyecto_id, tipo_evento, fecha, descripcion, version, resultado, observaciones, usuario_responsable, metadata
+
+**Tabla: `proyecto_estado`** (Vista Materializada)
+- Estado actual pre-calculado del proyecto
+- Campos: proyecto_id, titulo, modalidad, programa, estado_actual, fase
+- Participantes: director, codirector, estudiante1, estudiante2
+- Estado Formato A: version, intento_actual, estado
+- Estado Anteproyecto: estado, evaluadores_asignados
+
+### Documentación de Eventos
+
+Para información completa sobre los eventos del sistema, consulta:
+
+📄 **`progress-tracking-service/DOCUMENTACION_EVENTOS_COMPLETA.md`**
+
+Este documento centraliza:
+- ✅ Cuándo publicar cada evento (submission-service, review-service)
+- ✅ Estructura completa de todos los eventos (payloads)
+- ✅ Información de participantes requerida
+- ✅ Código de implementación
+- ✅ Guías de validación y pruebas
+
+## 📚 Documentación Adicional
+
+### Por Microservicio
+
+- **Progress Tracking Service**: Ver `progress-tracking-service/README.md`
+  - Arquitectura CQRS
+  - Event Sourcing
+  - APIs de consulta
+  - Documentación de eventos: `DOCUMENTACION_EVENTOS_COMPLETA.md`
+
+- **Identity Service**: Ver `identity-service/README.md`
+  - Gestión de usuarios
+  - Autenticación JWT
+  - Roles y permisos
+
+- **Submission Service**: Ver `submission-service/README.md`
+  - Gestión de Formato A
+  - Gestión de Anteproyectos
+  - Carga de documentos
+
+- **Review Service**: Ver `review-service/README.md`
+  - Evaluación de Formato A
+  - Asignación de evaluadores
+  - Evaluación de Anteproyectos
+
+- **Notification Service**: Ver `notification-service/README.md`
+  - Envío de emails
+  - Notificaciones del sistema
+
+### Guías de Pruebas
+
+- **Eventos con Postman**: Ver `PRUEBA_EVENTOS_POSTMAN.md`
+- **Review Service**: Ver `review-service/GUIA_PRUEBAS.md`
 
 ## 🔒 Seguridad
 
