@@ -25,11 +25,22 @@ public class FormatoA {
     @JoinColumn(name = "proyecto_id")
     private ProyectoGrado proyecto;
 
+    @Column(name = "numero_intento")
     private Integer numeroIntento;
+
+    @Column(name = "ruta_archivo")
     private String rutaArchivo;
+
+    @Column(name = "nombre_archivo")
     private String nombreArchivo;
+
+    @Column(name = "ruta_carta_aceptacion")
     private String rutaCartaAceptacion;
+
+    @Column(name = "nombre_carta_aceptacion")
     private String nombreCartaAceptacion;
+
+    @Column(name = "fecha_carga")
     private LocalDateTime fechaCarga = LocalDateTime.now();
 
     @Enumerated(EnumType.STRING)
@@ -38,7 +49,10 @@ public class FormatoA {
     @Column(columnDefinition = "text")
     private String observaciones;
 
+    @Column(name = "evaluado_por")
     private Integer evaluadoPor;
+
+    @Column(name = "fecha_evaluacion")
     private LocalDateTime fechaEvaluacion;
 
     public void aprobar(Integer evaluadorId, String observaciones) {

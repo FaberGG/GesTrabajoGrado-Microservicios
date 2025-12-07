@@ -26,8 +26,9 @@ public interface SubmissionRepository extends JpaRepository<ProyectoSubmission, 
     List<ProyectoSubmission> findByDocenteDirectorId(Long docenteId);
 
     /**
-     * Buscar proyectos por estudiante
+     * Buscar proyectos por estudiante (puede ser estudiante1 o estudiante2)
      */
+    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estudiante1Id = :estudianteId OR p.estudiante2Id = :estudianteId")
     List<ProyectoSubmission> findByEstudianteId(Long estudianteId);
 
     /**

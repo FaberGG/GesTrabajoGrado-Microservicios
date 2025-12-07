@@ -29,6 +29,7 @@ import java.util.Map;
  * - progress.anteproyecto.queue: eventos anteproyecto.enviado
  * - progress.proyecto.queue: eventos proyecto.rechazado-definitivamente
  * - progress.evaluacion.queue: eventos formatoa.evaluado, anteproyecto.evaluado
+ * - progress.evaluadores.queue: eventos evaluadores.asignados
  */
 @Component
 @RequiredArgsConstructor
@@ -62,8 +63,20 @@ public class ProjectEventConsumer {
             Long proyectoId = extractLong(payload, "proyectoId");
             Integer version = extractInteger(payload, "version");
             String titulo = (String) payload.getOrDefault("titulo", "Sin título");
+
+            // Extraer información del director
             Long directorId = extractLong(payload, "directorId");
+            String directorNombre = (String) payload.get("directorNombre");
+
             String timestamp = (String) payload.get("timestamp");
+
+            // Extraer información de estudiantes
+            Long estudiante1Id = extractLong(payload, "estudiante1Id");
+            String estudiante1Nombre = (String) payload.get("estudiante1Nombre");
+            String estudiante1Email = (String) payload.get("estudiante1Email");
+            Long estudiante2Id = extractLong(payload, "estudiante2Id");
+            String estudiante2Nombre = (String) payload.get("estudiante2Nombre");
+            String estudiante2Email = (String) payload.get("estudiante2Email");
 
             // Determinar tipo de evento y estado
             String tipoEvento = "formato-a.enviado".equals(routingKey)
@@ -85,17 +98,25 @@ public class ProjectEventConsumer {
             historialRepository.save(historial);
             log.debug("✅ Evento guardado en historial: ID={}", historial.getEventoId());
 
-            // 2. Actualizar vista materializada
-            projectStateService.actualizarEstadoFormatoA(
+            // 2. Actualizar vista materializada con información de estudiantes y director
+            projectStateService.actualizarEstadoFormatoAConEstudiantes(
                     proyectoId,
                     titulo,
                     version,
                     nuevoEstado,
                     directorId,
+                    directorNombre,
+                    estudiante1Id,
+                    estudiante1Nombre,
+                    estudiante1Email,
+                    estudiante2Id,
+                    estudiante2Nombre,
+                    estudiante2Email,
                     payload
             );
 
-            log.info("✅ [FORMATO A] Proyecto {} actualizado a: {}", proyectoId, nuevoEstado);
+            log.info("✅ [FORMATO A] Proyecto {} actualizado a: {} - Director: {} - Estudiantes: [{}, {}]",
+                    proyectoId, nuevoEstado, directorNombre, estudiante1Nombre, estudiante2Nombre);
 
         } catch (Exception e) {
             log.error("❌ Error procesando evento Formato A: routingKey={}, error={}",
@@ -110,38 +131,74 @@ public class ProjectEventConsumer {
 
     /**
      * Consumir evento: anteproyecto.enviado
+     * Incluye toda la información del proyecto
      */
     @RabbitListener(queues = "progress.anteproyecto.queue")
     public void onAnteproyectoEvent(@Payload Map<String, Object> payload) {
         try {
             log.info("📥 [ANTEPROYECTO] Evento recibido: {}", payload);
 
+            // Extraer datos COMPLETOS del payload
             Long proyectoId = extractLong(payload, "proyectoId");
             String titulo = (String) payload.getOrDefault("titulo", "Sin título");
+            String modalidad = (String) payload.get("modalidad");
+            String programa = (String) payload.get("programa");
+
+            // Director
+            Long directorId = extractLong(payload, "directorId");
+            String directorNombre = (String) payload.get("directorNombre");
+
+            // Co-director (opcional)
+            Long codirectorId = extractLong(payload, "codirectorId");
+            String codirectorNombre = (String) payload.get("codirectorNombre");
+
+            // Estudiantes
+            Long estudiante1Id = extractLong(payload, "estudiante1Id");
+            String estudiante1Nombre = (String) payload.get("estudiante1Nombre");
+            String estudiante1Email = (String) payload.get("estudiante1Email");
+            Long estudiante2Id = extractLong(payload, "estudiante2Id");
+            String estudiante2Nombre = (String) payload.get("estudiante2Nombre");
+            String estudiante2Email = (String) payload.get("estudiante2Email");
+
             String timestamp = (String) payload.get("timestamp");
 
-            // Guardar en historial
+            // Guardar en historial (Event Store)
             HistorialEvento historial = HistorialEvento.builder()
                     .proyectoId(proyectoId)
                     .tipoEvento("ANTEPROYECTO_ENVIADO")
                     .fecha(parseTimestamp(timestamp))
-                    .descripcion("Anteproyecto enviado: " + titulo)
+                    .descripcion(String.format("Anteproyecto enviado: %s", titulo))
                     .metadata(serializeToJson(payload))
                     .build();
 
             historialRepository.save(historial);
+            log.debug("✅ Evento guardado en historial: ID={}", historial.getEventoId());
 
-            // Actualizar estado
-            projectStateService.actualizarEstadoAnteproyecto(
+            // Actualizar vista materializada con toda la información
+            projectStateService.actualizarEstadoAnteproyectoCompleto(
                     proyectoId,
+                    titulo,
+                    modalidad,
+                    programa,
                     "ANTEPROYECTO_ENVIADO",
-                    payload
+                    directorId,
+                    directorNombre,
+                    codirectorId,
+                    codirectorNombre,
+                    estudiante1Id,
+                    estudiante1Nombre,
+                    estudiante1Email,
+                    estudiante2Id,
+                    estudiante2Nombre,
+                    estudiante2Email
             );
 
-            log.info("✅ [ANTEPROYECTO] Proyecto {} actualizado a: ANTEPROYECTO_ENVIADO", proyectoId);
+            log.info("✅ [ANTEPROYECTO] Proyecto {} actualizado a: ANTEPROYECTO_ENVIADO - Modalidad: {}, Estudiantes: [{}, {}]",
+                    proyectoId, modalidad, estudiante1Nombre, estudiante2Nombre);
 
         } catch (Exception e) {
             log.error("❌ Error procesando evento Anteproyecto: {}", e.getMessage(), e);
+            // TODO: Enviar a DLQ (Dead Letter Queue) en producción
         }
     }
 
@@ -249,6 +306,51 @@ public class ProjectEventConsumer {
         } catch (Exception e) {
             log.error("❌ Error procesando evento Evaluación: routingKey={}, error={}",
                     routingKey, e.getMessage(), e);
+        }
+    }
+
+    // ==========================================
+    // EVENTOS DE EVALUADORES ASIGNADOS
+    // ==========================================
+
+    /**
+     * Consumir evento: evaluadores.asignados
+     * Se publica cuando el jefe de departamento asigna evaluadores al anteproyecto
+     */
+    @RabbitListener(queues = "progress.evaluadores.queue")
+    public void onEvaluadoresAsignadosEvent(@Payload Map<String, Object> payload) {
+        try {
+            log.info("📥 [EVALUADORES] Evento recibido: {}", payload);
+
+            Long proyectoId = extractLong(payload, "proyectoId");
+            String timestamp = (String) payload.get("timestamp");
+
+            // Extraer lista de evaluadores
+            Object evaluadoresObj = payload.get("evaluadores");
+            int cantidadEvaluadores = 0;
+
+            if (evaluadoresObj instanceof java.util.List) {
+                cantidadEvaluadores = ((java.util.List<?>) evaluadoresObj).size();
+            }
+
+            // Guardar en historial
+            HistorialEvento historial = HistorialEvento.builder()
+                    .proyectoId(proyectoId)
+                    .tipoEvento("EVALUADORES_ASIGNADOS")
+                    .fecha(parseTimestamp(timestamp))
+                    .descripcion(String.format("Se asignaron %d evaluadores al anteproyecto", cantidadEvaluadores))
+                    .metadata(serializeToJson(payload))
+                    .build();
+
+            historialRepository.save(historial);
+
+            // Actualizar estado del proyecto
+            projectStateService.actualizarEstadoEvaluadoresAsignados(proyectoId);
+
+            log.info("✅ [EVALUADORES] Proyecto {} - Evaluadores asignados: {}", proyectoId, cantidadEvaluadores);
+
+        } catch (Exception e) {
+            log.error("❌ Error procesando evento Evaluadores Asignados: {}", e.getMessage(), e);
         }
     }
 

@@ -1,8 +1,8 @@
 package co.unicauca.comunicacionmicroservicios.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -38,17 +38,19 @@ public class RabbitConfig {
     // ===== NUEVA CONFIGURACIÓN PARA PROGRESS TRACKING =====
 
     /**
-     * Exchange principal para eventos de proyectos
-     * Usado por Progress Tracking Service
+     * Exchanges para eventos de proyectos (sincronizados con progress-tracking-service)
      */
-    public static final String PROJECT_EVENTS_EXCHANGE = "project.events.exchange";
+    public static final String FORMATOA_EXCHANGE = "formato-a-exchange";
+    public static final String ANTEPROYECTO_EXCHANGE = "anteproyecto-exchange";
+    public static final String PROYECTO_EXCHANGE = "proyecto-exchange";
 
     /**
      * Routing keys para los diferentes eventos
      */
-    public static final String FORMATOA_SUBMITTED_ROUTING_KEY = "project.formatoa.submitted";
-    public static final String FORMATOA_RESUBMITTED_ROUTING_KEY = "project.formatoa.resubmitted";
-    public static final String ANTEPROYECTO_SUBMITTED_ROUTING_KEY = "project.anteproyecto.submitted";
+    public static final String FORMATOA_SUBMITTED_ROUTING_KEY = "formato-a.enviado";
+    public static final String FORMATOA_RESUBMITTED_ROUTING_KEY = "formato-a.reenviado";
+    public static final String ANTEPROYECTO_SUBMITTED_ROUTING_KEY = "anteproyecto.enviado";
+    public static final String PROYECTO_RECHAZADO_ROUTING_KEY = "proyecto.rechazado-definitivamente";
 
     /**
      * Converter para serializar/deserializar mensajes como JSON.
@@ -80,11 +82,21 @@ public class RabbitConfig {
     }
 
     /**
-     * Declara el Topic Exchange para eventos de proyectos
-     * Progress Tracking Service se bindea a este exchange
+     * Declara los Direct Exchanges para eventos de proyectos
+     * Progress Tracking Service se bindea a estos exchanges
      */
     @Bean
-    public TopicExchange projectEventsExchange() {
-        return new TopicExchange(PROJECT_EVENTS_EXCHANGE, true, false);
+    public DirectExchange formatoAExchange() {
+        return new DirectExchange(FORMATOA_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public DirectExchange anteproyectoExchange() {
+        return new DirectExchange(ANTEPROYECTO_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public DirectExchange proyectoExchange() {
+        return new DirectExchange(PROYECTO_EXCHANGE, true, false);
     }
 }

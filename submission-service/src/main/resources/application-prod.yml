@@ -36,11 +36,35 @@ spring:
     username: ${RABBITMQ_USER:admin}
     password: ${RABBITMQ_PASS:admin_password}
     connection-timeout: 30000
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 3000
+          max-attempts: 3
+          multiplier: 2
 
   servlet:
     multipart:
       max-file-size: 15MB
       max-request-size: 20MB
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+    doc-expansion: none
+    display-request-duration: true
+  packages-to-scan: co.unicauca.comunicacionmicroservicios.controller
+  show-actuator: false
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
 
 # Almacenamiento de archivos
 file:
@@ -63,6 +87,20 @@ submission:
 notification:
   base-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8083/api/notifications}
   timeout-ms: 5000
+  # Emails por defecto
+  default:
+    coordinador-email: ${COORDINADOR_EMAIL:coordinador@unicauca.edu.co}
+    jefe-departamento-email: ${JEFE_DEPARTAMENTO_EMAIL:jefe.departamento@unicauca.edu.co}
+
+# Cliente HTTP para Identity Service
+identity:
+  base-url: ${IDENTITY_SERVICE_URL:http://identity:8081}
+  timeout-ms: 3000
+
+# Token de servicio interno
+service:
+  internal:
+    token: ${SERVICE_INTERNAL_TOKEN:default-token-only-for-dev}
 
 # Logging para producción
 logging:
@@ -94,3 +132,5 @@ management:
     export:
       prometheus:
         enabled: true
+
+

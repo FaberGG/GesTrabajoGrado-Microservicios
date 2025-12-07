@@ -1,5 +1,24 @@
 # 📤 Guía: Cuándo Submission-Service Debe Publicar Eventos
 
+## 📦 **DOCUMENTO LEGACY - USA LA NUEVA DOCUMENTACIÓN CENTRALIZADA**
+
+> **⚠️ ESTE DOCUMENTO YA NO SE ACTUALIZA**
+> 
+> **👉 Por favor, usa el nuevo documento centralizado:**
+> 
+> # 📄 [DOCUMENTACION_EVENTOS_COMPLETA.md](./DOCUMENTACION_EVENTOS_COMPLETA.md)
+> 
+> El nuevo documento incluye:
+> - ✅ Toda la información de este documento y más
+> - ✅ Estructura completa de TODOS los eventos
+> - ✅ Información de participantes (director, codirector, estudiantes, evaluadores)
+> - ✅ Código de implementación completo
+> - ✅ Guías de validación y pruebas
+> 
+> **Este documento se mantiene solo por compatibilidad.**
+
+---
+
 ## ⚠️ **ADVERTENCIA IMPORTANTE**
 
 > **Este documento es una GUÍA DE IMPLEMENTACIÓN FUTURA.**
@@ -157,6 +176,55 @@ log.info("✉️ Evento publicado: anteproyecto.enviado - Proyecto: {}", proyect
 
 ---
 
+### **5️⃣ Asignar Evaluadores al Anteproyecto (Review-Service)**
+
+**Endpoint:** `POST /api/reviews/anteproyecto/{proyectoId}/asignar-evaluadores`
+
+**Ubicación en el código:** `AnteproyectoReviewController.asignarEvaluadores()`
+
+**Cuándo publicar:** **Inmediatamente después** de asignar los evaluadores en la base de datos
+
+**Código a agregar:**
+
+```java
+// DESPUÉS de guardar la asignación de evaluadores en BD
+List<Evaluador> evaluadoresAsignados = evaluadorRepository.saveAll(evaluadores);
+
+// Construir lista de evaluadores para el evento
+List<Map<String, Object>> evaluadoresInfo = evaluadoresAsignados.stream()
+    .map(e -> Map.of(
+        "id", e.getId(),
+        "nombre", e.getNombreCompleto()
+    ))
+    .collect(Collectors.toList());
+
+// ✅ PUBLICAR EVENTO PARA PROGRESS-SERVICE
+rabbitTemplate.convertAndSend(
+    "evaluacion-exchange",          // Exchange
+    "evaluadores.asignados",        // Routing key
+    Map.of(
+        "proyectoId", proyectoId,
+        "evaluadores", evaluadoresInfo,
+        "timestamp", LocalDateTime.now().toString(),
+        "usuarioResponsableId", jefeDepartamento.getId(),
+        "usuarioResponsableNombre", jefeDepartamento.getNombreCompleto(),
+        "usuarioResponsableRol", "JEFE_DEPARTAMENTO"
+    )
+);
+
+log.info("✉️ Evento publicado: evaluadores.asignados - Proyecto: {}, Cantidad: {}", 
+         proyectoId, evaluadoresInfo.size());
+```
+
+**Efecto en Progress-Service:**
+- Estado actualizado a: `ANTEPROYECTO_EN_EVALUACION`
+- Campo `anteproyecto_evaluadores_asignados` = `true`
+- Historial: "Se asignaron 2 evaluadores al anteproyecto"
+- Estado legible: "Anteproyecto en evaluación"
+- Siguiente paso: "Esperar evaluación de evaluadores"
+
+---
+
 ## 🏗️ Configuración Necesaria en Submission-Service
 
 ### **1. Actualizar `RabbitConfig.java`**
@@ -214,13 +282,14 @@ public class FormatoAController {
 
 ## 📊 Tabla Resumen: Evento → Estado en Progress-Service
 
-| **Acción en Submission** | **Exchange** | **Routing Key** | **Estado en Progress** |
-|--------------------------|--------------|-----------------|------------------------|
-| POST /formatoA (v1) | `formato-a-exchange` | `formato-a.enviado` | `EN_PRIMERA_EVALUACION_FORMATO_A` |
-| POST /formatoA/reenviar (v2) | `formato-a-exchange` | `formato-a.reenviado` | `EN_SEGUNDA_EVALUACION_FORMATO_A` |
-| POST /formatoA/reenviar (v3) | `formato-a-exchange` | `formato-a.reenviado` | `EN_TERCERA_EVALUACION_FORMATO_A` |
-| Detectar rechazo v3 | `proyecto-exchange` | `proyecto.rechazado-definitivamente` | `FORMATO_A_RECHAZADO_DEFINITIVO` |
-| POST /anteproyecto | `anteproyecto-exchange` | `anteproyecto.enviado` | `ANTEPROYECTO_ENVIADO` |
+| **Acción** | **Servicio** | **Exchange** | **Routing Key** | **Estado en Progress** |
+|------------|--------------|--------------|-----------------|------------------------|
+| POST /formatoA (v1) | submission | `formato-a-exchange` | `formato-a.enviado` | `EN_PRIMERA_EVALUACION_FORMATO_A` |
+| POST /formatoA/reenviar (v2) | submission | `formato-a-exchange` | `formato-a.reenviado` | `EN_SEGUNDA_EVALUACION_FORMATO_A` |
+| POST /formatoA/reenviar (v3) | submission | `formato-a-exchange` | `formato-a.reenviado` | `EN_TERCERA_EVALUACION_FORMATO_A` |
+| Detectar rechazo v3 | submission | `proyecto-exchange` | `proyecto.rechazado-definitivamente` | `FORMATO_A_RECHAZADO_DEFINITIVO` |
+| POST /anteproyecto | submission | `anteproyecto-exchange` | `anteproyecto.enviado` | `ANTEPROYECTO_ENVIADO` |
+| POST /asignar-evaluadores | review | `evaluacion-exchange` | `evaluadores.asignados` | `ANTEPROYECTO_EN_EVALUACION` |
 
 ---
 

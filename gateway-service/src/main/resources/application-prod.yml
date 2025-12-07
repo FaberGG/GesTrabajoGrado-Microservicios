@@ -9,6 +9,29 @@ spring:
   application:
     name: gateway-service
 
+  # Spring Cloud Gateway Configuration
+  cloud:
+    gateway:
+      httpclient:
+        # Configuración para manejo de multipart/form-data
+        pool:
+          max-connections: 100
+          max-idle-time: 30s
+        connect-timeout: 5000
+        response-timeout: 60000
+        # Habilitar compresión
+        compression: true
+      # Configuración de codecs para manejar archivos grandes
+      codec:
+        max-in-memory-size: 50MB
+
+  # Servlet multipart configuration (aunque Gateway es reactivo, esto ayuda)
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
+
   # RabbitMQ Configuration
   rabbitmq:
     host: ${RABBITMQ_HOST:rabbitmq}

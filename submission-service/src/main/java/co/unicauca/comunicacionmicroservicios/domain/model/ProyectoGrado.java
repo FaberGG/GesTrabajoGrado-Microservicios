@@ -25,23 +25,31 @@ public class ProyectoGrado {
     @Enumerated(EnumType.STRING)
     private enumModalidad modalidad;
 
+    @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion = LocalDateTime.now();
 
+    @Column(name = "director_id")
     private Integer directorId;
+
+    @Column(name = "codirector_id")
     private Integer codirectorId;
 
-    @Column(columnDefinition = "text")
+    @Column(name = "objetivo_general", columnDefinition = "text")
     private String objetivoGeneral;
 
-    @Column(columnDefinition = "text")
+    @Column(name = "objetivos_especificos", columnDefinition = "text")
     private String objetivosEspecificos;
 
+    @Column(name = "estudiante_1_id")
     private Integer estudiante1Id;
+
+    @Column(name = "estudiante_2_id")
     private Integer estudiante2Id;
 
     @Enumerated(EnumType.STRING)
     private enumEstadoProyecto estado = enumEstadoProyecto.EN_PROCESO;
 
+    @Column(name = "numero_intentos")
     private Integer numeroIntentos = 1;
 
     // Relación con FormatoA (OneToMany por intentos)

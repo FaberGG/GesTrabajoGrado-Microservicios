@@ -35,15 +35,15 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
     depends_on:
       identity:
-        condition: service_healthy
+        condition: service_started
       submission:
-        condition: service_healthy
+        condition: service_started
       notification:
-        condition: service_healthy
+        condition: service_started
       review:
-        condition: service_healthy
+        condition: service_started
       tracking:
-        condition: service_healthy
+        condition: service_started
       rabbitmq:
         condition: service_healthy
     networks:
@@ -148,8 +148,8 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
     deploy:
       resources:
         limits:

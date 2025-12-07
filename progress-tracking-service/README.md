@@ -196,7 +196,19 @@ El servicio escucha la cola `progress.tracking.queue` y consume los siguientes e
 ```json
 {
   "proyectoId": 1,
-  "descripcion": "Anteproyecto completo",
+  "titulo": "Sistema de IA para Agricultura",
+  "modalidad": "DUPLA",
+  "programa": "INGENIERIA_SISTEMAS",
+  "directorId": 12,
+  "directorNombre": "Dr. Juan Pérez",
+  "codirectorId": 15,
+  "codirectorNombre": "Dra. Ana Martínez",
+  "estudiante1Id": 1001,
+  "estudiante1Nombre": "María García",
+  "estudiante1Email": "maria.garcia@unicauca.edu.co",
+  "estudiante2Id": 1002,
+  "estudiante2Nombre": "Carlos López",
+  "estudiante2Email": "carlos.lopez@unicauca.edu.co",
   "timestamp": "2025-11-05T10:00:00",
   "usuarioResponsableId": 12,
   "usuarioResponsableNombre": "Dr. Juan Pérez",
@@ -208,12 +220,20 @@ El servicio escucha la cola `progress.tracking.queue` y consume los siguientes e
 
 **Actualiza estado a**: `ANTEPROYECTO_ENVIADO`
 
+**Nota**: Este evento debe incluir información completa del proyecto (director, codirector, estudiantes) para que progress-tracking pueda actualizar/completar toda la información.
+
 ### 5. EvaluadoresAsignadosEvent
 
-```json
+**Origen**: Review Service (Jefe de Departamento asigna evaluadores)
 {
   "proyectoId": 1,
   "evaluadores": [
+**Actualiza campo**: `anteproyectoEvaluadoresAsignados = true`
+
+**Estado legible**: "Anteproyecto en evaluación"
+
+**Siguiente paso**: "Esperar evaluación de evaluadores"
+
     {"id": 20, "nombre": "Dr. Evaluador 1"},
     {"id": 21, "nombre": "Dr. Evaluador 2"}
   ],

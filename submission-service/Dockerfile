@@ -46,7 +46,7 @@ ENV SPRING_PROFILES_ACTIVE="prod" \
     SERVER_PORT="8082"
 
 # Health check para Docker
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health || exit 1
 
 # Comando de inicio con optimizaciones JVM para contenedores

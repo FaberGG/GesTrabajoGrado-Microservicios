@@ -18,17 +18,21 @@ public class Anteproyecto {
     @JoinColumn(name = "proyecto_id", nullable = false)
     private ProyectoGrado proyecto;
 
-    @Column(nullable = false)
+    @Column(name = "ruta_archivo", nullable = false)
     private String rutaArchivo;
 
-    @Column(nullable = false)
+    @Column(name = "nombre_archivo", nullable = false)
     private String nombreArchivo;
 
-    @Column(nullable = false)
+    @Column(name = "fecha_envio", nullable = false)
     private LocalDateTime fechaEnvio;
 
     @Column(length = 30)
     private String estado; // opcional (si luego quieres manejar estados)
+
+    // Constructor vacío requerido por JPA
+    public Anteproyecto() {
+    }
 
     @PrePersist
     public void prePersist() {

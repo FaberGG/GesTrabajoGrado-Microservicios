@@ -4,6 +4,9 @@ import co.unicauca.comunicacionmicroservicios.dto.CreateSubmissionDTO;
 import co.unicauca.comunicacionmicroservicios.dto.EvaluacionDTO;
 import co.unicauca.comunicacionmicroservicios.dto.SubmissionResponseDTO;
 import co.unicauca.comunicacionmicroservicios.service.SubmissionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/submissions")
 @CrossOrigin(origins = "*")
+@Tag(name = "Health Check", description = "Endpoints de monitoreo y salud del servicio")
 public class SubmissionController {
 
     @Autowired
@@ -184,6 +188,21 @@ public class SubmissionController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ErrorResponse("Proyecto no encontrado"));
         }
+    }
+
+    /**
+     * GET /api/submissions/health
+     * Health check simple para verificar que el servicio está activo
+     */
+    @GetMapping("/health")
+    @Operation(
+        summary = "Health check simple",
+        description = "Verifica que el servicio esté activo y respondiendo",
+        tags = {"Health Check"}
+    )
+    @ApiResponse(responseCode = "200", description = "Servicio activo")
+    public String health() {
+        return "ok";
     }
 
     /**

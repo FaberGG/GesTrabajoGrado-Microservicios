@@ -33,18 +33,25 @@ public class ProjectStateService {
     // ==========================================
 
     /**
-     * Actualiza estado tras envío/reenvío de Formato A
+     * Actualiza estado tras envío/reenvío de Formato A con información completa de estudiantes y director
      */
     @Transactional
-    public void actualizarEstadoFormatoA(
+    public void actualizarEstadoFormatoAConEstudiantes(
             Long proyectoId,
             String titulo,
             Integer version,
             String nuevoEstado,
             Long directorId,
+            String directorNombre,
+            Long estudiante1Id,
+            String estudiante1Nombre,
+            String estudiante1Email,
+            Long estudiante2Id,
+            String estudiante2Nombre,
+            String estudiante2Email,
             Map<String, Object> payload
     ) {
-        log.debug("📝 Actualizando Formato A - Proyecto: {}, Versión: {}, Estado: {}",
+        log.debug("📝 Actualizando Formato A con estudiantes y director - Proyecto: {}, Versión: {}, Estado: {}",
                 proyectoId, version, nuevoEstado);
 
         // Obtener o crear estado
@@ -62,15 +69,37 @@ public class ProjectStateService {
         estado.setFormatoAEstado("EN_EVALUACION");
         estado.setFormatoAFechaUltimoEnvio(LocalDateTime.now());
 
-        // Extraer datos adicionales del payload
-        if (payload.containsKey("estudiante1Id")) {
-            // Aquí podrías guardar IDs de estudiantes si los necesitas
+        // Actualizar información del director
+        if (directorId != null) {
+            estado.setDirectorId(directorId);
+            estado.setDirectorNombre(directorNombre);
+        }
+
+        // Actualizar información de estudiantes
+        if (estudiante1Id != null) {
+            estado.setEstudiante1Id(estudiante1Id);
+            estado.setEstudiante1Nombre(estudiante1Nombre);
+            estado.setEstudiante1Email(estudiante1Email);
+        }
+        if (estudiante2Id != null) {
+            estado.setEstudiante2Id(estudiante2Id);
+            estado.setEstudiante2Nombre(estudiante2Nombre);
+            estado.setEstudiante2Email(estudiante2Email);
+        }
+
+        // Extraer información adicional del proyecto si está disponible
+        if (payload.containsKey("modalidad")) {
+            estado.setModalidad((String) payload.get("modalidad"));
+        }
+        if (payload.containsKey("programa")) {
+            estado.setPrograma((String) payload.get("programa"));
         }
 
         estado.setUltimaActualizacion(LocalDateTime.now());
         proyectoEstadoRepository.save(estado);
 
-        log.info("✅ Estado Formato A actualizado - Proyecto: {} -> {}", proyectoId, nuevoEstado);
+        log.info("✅ Estado Formato A actualizado - Proyecto: {} -> {} - Director: {} - Estudiantes: [{}, {}]",
+                proyectoId, nuevoEstado, directorNombre, estudiante1Nombre, estudiante2Nombre);
     }
 
     /**
@@ -133,8 +162,10 @@ public class ProjectStateService {
     // ==========================================
 
     /**
-     * Actualiza estado tras envío de Anteproyecto
+     * Actualiza estado tras envío de Anteproyecto (VERSIÓN ANTIGUA - DEPRECADA)
+     * @deprecated Use actualizarEstadoAnteproyectoCompleto en su lugar
      */
+    @Deprecated
     @Transactional
     public void actualizarEstadoAnteproyecto(Long proyectoId, String nuevoEstado, Map<String, Object> payload) {
         log.debug("📄 Actualizando Anteproyecto - Proyecto: {}, Estado: {}", proyectoId, nuevoEstado);
@@ -151,6 +182,80 @@ public class ProjectStateService {
         proyectoEstadoRepository.save(estado);
 
         log.info("✅ Estado Anteproyecto actualizado - Proyecto: {} -> {}", proyectoId, nuevoEstado);
+    }
+
+    /**
+     * Actualiza estado tras envío de Anteproyecto con TODOS los campos del proyecto
+     * Esta es la versión completa que debe usarse para asegurar que todos los datos se persistan
+     */
+    @Transactional
+    public void actualizarEstadoAnteproyectoCompleto(
+            Long proyectoId,
+            String titulo,
+            String modalidad,
+            String programa,
+            String nuevoEstado,
+            Long directorId,
+            String directorNombre,
+            Long codirectorId,
+            String codirectorNombre,
+            Long estudiante1Id,
+            String estudiante1Nombre,
+            String estudiante1Email,
+            Long estudiante2Id,
+            String estudiante2Nombre,
+            String estudiante2Email
+    ) {
+        log.info("🔄 Actualizando estado COMPLETO Anteproyecto - Proyecto: {}, Estado: {}",
+                proyectoId, nuevoEstado);
+
+        // Obtener estado existente (debe existir porque ya pasó por Formato A)
+        ProyectoEstado estado = proyectoEstadoRepository.findById(proyectoId)
+                .orElseThrow(() -> {
+                    log.error("❌ Proyecto no encontrado: {}. El Formato A debe ser aprobado primero.", proyectoId);
+                    return new RuntimeException("Proyecto no encontrado: " + proyectoId);
+                });
+
+        // Actualizar información básica del proyecto (puede haber cambiado)
+        estado.setTitulo(titulo);
+        estado.setModalidad(modalidad);
+        estado.setPrograma(programa);
+        estado.setEstadoActual(nuevoEstado);
+        estado.setFase("ANTEPROYECTO");
+
+        // Actualizar campos específicos de Anteproyecto
+        estado.setAnteproyectoEstado("EN_EVALUACION");
+        estado.setAnteproyectoFechaEnvio(LocalDateTime.now());
+
+        // Actualizar Director (puede haber cambiado)
+        if (directorId != null) {
+            estado.setDirectorId(directorId);
+            estado.setDirectorNombre(directorNombre);
+        }
+
+        // Actualizar Co-director (opcional)
+        if (codirectorId != null) {
+            estado.setCodirectorId(codirectorId);
+            estado.setCodirectorNombre(codirectorNombre);
+        }
+
+        // Actualizar Estudiantes con email
+        if (estudiante1Id != null) {
+            estado.setEstudiante1Id(estudiante1Id);
+            estado.setEstudiante1Nombre(estudiante1Nombre);
+            estado.setEstudiante1Email(estudiante1Email);
+        }
+        if (estudiante2Id != null) {
+            estado.setEstudiante2Id(estudiante2Id);
+            estado.setEstudiante2Nombre(estudiante2Nombre);
+            estado.setEstudiante2Email(estudiante2Email);
+        }
+
+        estado.setUltimaActualizacion(LocalDateTime.now());
+        proyectoEstadoRepository.save(estado);
+
+        log.info("✅ Estado COMPLETO Anteproyecto actualizado - Proyecto: {}, Modalidad: {}, Programa: {}, Director: {}, Estudiantes: [{}, {}]",
+                proyectoId, modalidad, programa, directorNombre, estudiante1Nombre, estudiante2Nombre);
     }
 
     /**
@@ -171,6 +276,26 @@ public class ProjectStateService {
         proyectoEstadoRepository.save(estado);
 
         log.info("✅ Evaluación Anteproyecto actualizada - Proyecto: {} -> {}", proyectoId, nuevoEstado);
+    }
+
+    /**
+     * Actualiza estado cuando se asignan evaluadores al anteproyecto
+     */
+    @Transactional
+    public void actualizarEstadoEvaluadoresAsignados(Long proyectoId) {
+        log.debug("👥 Asignando evaluadores al Anteproyecto - Proyecto: {}", proyectoId);
+
+        ProyectoEstado estado = proyectoEstadoRepository.findById(proyectoId)
+                .orElseThrow(() -> new RuntimeException("Proyecto no encontrado: " + proyectoId));
+
+        estado.setEstadoActual("ANTEPROYECTO_EN_EVALUACION");
+        estado.setAnteproyectoEstado("EN_EVALUACION");
+        estado.setAnteproyectoEvaluadoresAsignados(true);
+        estado.setUltimaActualizacion(LocalDateTime.now());
+
+        proyectoEstadoRepository.save(estado);
+
+        log.info("✅ Evaluadores asignados - Proyecto: {} -> ANTEPROYECTO_EN_EVALUACION", proyectoId);
     }
 
     // ==========================================
