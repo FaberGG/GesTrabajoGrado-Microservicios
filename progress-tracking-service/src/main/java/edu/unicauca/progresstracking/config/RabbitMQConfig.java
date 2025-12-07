@@ -28,6 +28,7 @@ import org.springframework.context.annotation.Configuration;
  * 4. evaluacion-exchange:
  *    - formatoa.evaluado
  *    - anteproyecto.evaluado
+ *    - evaluadores.asignados
  */
 @Configuration
 public class RabbitMQConfig {
@@ -66,6 +67,14 @@ public class RabbitMQConfig {
     @Bean
     public Queue evaluacionProgressQueue() {
         return QueueBuilder.durable("progress.evaluacion.queue").build();
+    }
+
+    /**
+     * Cola para eventos de Evaluadores Asignados (desde review-service)
+     */
+    @Bean
+    public Queue evaluadoresProgressQueue() {
+        return QueueBuilder.durable("progress.evaluadores.queue").build();
     }
 
     // ==========================================
@@ -166,6 +175,17 @@ public class RabbitMQConfig {
     /**
      * Binding: anteproyecto.evaluado -> progress.evaluacion.queue
      */
+    /**
+     * Binding: evaluadores.asignados -> progress.evaluadores.queue
+     */
+    @Bean
+    public Binding bindEvaluadoresAsignados(Queue evaluadoresProgressQueue, DirectExchange evaluacionExchange) {
+        return BindingBuilder
+                .bind(evaluadoresProgressQueue)
+                .to(evaluacionExchange)
+                .with("evaluadores.asignados");
+    }
+
     @Bean
     public Binding bindAnteproyectoEvaluado(Queue evaluacionProgressQueue, DirectExchange evaluacionExchange) {
         return BindingBuilder

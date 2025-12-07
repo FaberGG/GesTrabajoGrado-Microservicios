@@ -107,6 +107,22 @@ public class ProgressController {
         }
         response.put("participantes", participantes);
 
+        // Estudiantes
+        Map<String, Object> estudiantes = new HashMap<>();
+        if (estado.getEstudiante1Id() != null) {
+            estudiantes.put("estudiante1", Map.of(
+                    "id", estado.getEstudiante1Id(),
+                    "nombre", estado.getEstudiante1Nombre() != null ? estado.getEstudiante1Nombre() : "Sin nombre"
+            ));
+        }
+        if (estado.getEstudiante2Id() != null) {
+            estudiantes.put("estudiante2", Map.of(
+                    "id", estado.getEstudiante2Id(),
+                    "nombre", estado.getEstudiante2Nombre() != null ? estado.getEstudiante2Nombre() : "Sin nombre"
+            ));
+        }
+        response.put("estudiantes", estudiantes);
+
         log.info("✅ Estado consultado exitosamente");
         return ResponseEntity.ok(response);
     }
@@ -208,6 +224,185 @@ public class ProgressController {
         response.put("total", proyectosList.size());
 
         log.info("✅ Encontrados {} proyectos para el usuario", proyectosList.size());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 🆕 NUEVO: Obtener historial del proyecto de un estudiante
+     *
+     * GET /api/progress/estudiantes/{estudianteId}/historial
+     *
+     * Este endpoint permite que un estudiante consulte el historial
+     * de su proyecto sin necesidad de conocer el ID del proyecto
+     */
+    @GetMapping("/estudiantes/{estudianteId}/historial")
+    public ResponseEntity<Map<String, Object>> obtenerHistorialPorEstudiante(
+            @PathVariable("estudianteId") Long estudianteId,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "tipoEvento", required = false) String tipoEvento
+    ) {
+        log.info("👨‍🎓 Consultando historial del estudiante: {} (page={}, size={})", estudianteId, page, size);
+
+        // Buscar el proyecto del estudiante
+        Optional<ProyectoEstado> proyectoOpt = proyectoEstadoRepository.findByEstudianteId(estudianteId);
+
+        if (proyectoOpt.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "error", false,
+                    "mensaje", "El estudiante no tiene proyectos asignados actualmente",
+                    "estudianteId", estudianteId,
+                    "historial", Collections.emptyList(),
+                    "totalEventos", 0
+            ));
+        }
+
+        ProyectoEstado proyecto = proyectoOpt.get();
+        Long proyectoId = proyecto.getProyectoId();
+
+        // Obtener historial del proyecto
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "fecha"));
+        Page<HistorialEvento> historialPage;
+
+        if (tipoEvento != null && !tipoEvento.isEmpty()) {
+            List<String> tipos = Arrays.asList(tipoEvento.split(","));
+            historialPage = historialEventoRepository.findByProyectoIdAndTipoEventoIn(proyectoId, tipos, pageable);
+        } else {
+            historialPage = historialEventoRepository.findByProyectoIdOrderByFechaDesc(proyectoId, pageable);
+        }
+
+        // Convertir a DTOs
+        List<Map<String, Object>> historialList = historialPage.getContent().stream()
+                .map(this::convertirEventoADTO)
+                .collect(Collectors.toList());
+
+        // Construir respuesta con información del proyecto
+        Map<String, Object> response = new HashMap<>();
+        response.put("estudianteId", estudianteId);
+        response.put("proyectoId", proyectoId);
+        response.put("tituloProyecto", proyecto.getTitulo());
+        response.put("estadoActual", proyecto.getEstadoActual());
+        response.put("estadoLegible", projectStateService.convertirEstadoLegible(proyecto.getEstadoActual()));
+        response.put("fase", proyecto.getFase());
+
+        // Información de estudiantes (compañeros)
+        Map<String, Object> estudiantes = new HashMap<>();
+        if (proyecto.getEstudiante1Id() != null) {
+            estudiantes.put("estudiante1", Map.of(
+                    "id", proyecto.getEstudiante1Id(),
+                    "nombre", proyecto.getEstudiante1Nombre() != null ? proyecto.getEstudiante1Nombre() : "Sin nombre"
+            ));
+        }
+        if (proyecto.getEstudiante2Id() != null) {
+            estudiantes.put("estudiante2", Map.of(
+                    "id", proyecto.getEstudiante2Id(),
+                    "nombre", proyecto.getEstudiante2Nombre() != null ? proyecto.getEstudiante2Nombre() : "Sin nombre"
+            ));
+        }
+        response.put("estudiantes", estudiantes);
+
+        response.put("historial", historialList);
+        response.put("paginaActual", historialPage.getNumber());
+        response.put("tamanoPagina", historialPage.getSize());
+        response.put("totalEventos", historialPage.getTotalElements());
+        response.put("totalPaginas", historialPage.getTotalPages());
+
+        log.info("✅ Historial consultado para estudiante {}: {} eventos", estudianteId, historialList.size());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 🆕 NUEVO: Obtener estado del proyecto de un estudiante
+     *
+     * GET /api/progress/estudiantes/{estudianteId}/estado
+     *
+     * Este endpoint permite que un estudiante consulte el estado actual
+     * de su proyecto sin necesidad de conocer el ID del proyecto
+     */
+    @GetMapping("/estudiantes/{estudianteId}/estado")
+    public ResponseEntity<Map<String, Object>> obtenerEstadoPorEstudiante(
+            @PathVariable("estudianteId") Long estudianteId
+    ) {
+        log.info("👨‍🎓 Consultando estado del proyecto del estudiante: {}", estudianteId);
+
+        // Buscar el proyecto del estudiante
+        Optional<ProyectoEstado> proyectoOpt = proyectoEstadoRepository.findByEstudianteId(estudianteId);
+
+        if (proyectoOpt.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "error", false,
+                    "mensaje", "El estudiante no tiene proyectos asignados actualmente",
+                    "estudianteId", estudianteId,
+                    "tieneProyecto", false
+            ));
+        }
+
+        ProyectoEstado estado = proyectoOpt.get();
+
+        // Construir respuesta enriquecida
+        Map<String, Object> response = new HashMap<>();
+        response.put("tieneProyecto", true);
+        response.put("estudianteId", estudianteId);
+        response.put("proyectoId", estado.getProyectoId());
+        response.put("titulo", estado.getTitulo());
+        response.put("modalidad", estado.getModalidad());
+        response.put("programa", estado.getPrograma());
+        response.put("estadoActual", estado.getEstadoActual());
+        response.put("estadoLegible", projectStateService.convertirEstadoLegible(estado.getEstadoActual()));
+        response.put("fase", estado.getFase());
+        response.put("ultimaActualizacion", estado.getUltimaActualizacion());
+        response.put("siguientePaso", projectStateService.determinarSiguientePaso(estado.getEstadoActual()));
+
+        // Información de Formato A
+        Map<String, Object> formatoAInfo = new HashMap<>();
+        formatoAInfo.put("estado", estado.getFormatoAEstado());
+        formatoAInfo.put("versionActual", estado.getFormatoAVersion());
+        formatoAInfo.put("intentoActual", estado.getFormatoAIntentoActual());
+        formatoAInfo.put("maxIntentos", estado.getFormatoAMaxIntentos());
+        formatoAInfo.put("fechaUltimoEnvio", estado.getFormatoAFechaUltimoEnvio());
+        formatoAInfo.put("fechaUltimaEvaluacion", estado.getFormatoAFechaUltimaEvaluacion());
+        response.put("formatoA", formatoAInfo);
+
+        // Información de Anteproyecto
+        Map<String, Object> anteproyectoInfo = new HashMap<>();
+        anteproyectoInfo.put("estado", estado.getAnteproyectoEstado());
+        anteproyectoInfo.put("fechaEnvio", estado.getAnteproyectoFechaEnvio());
+        anteproyectoInfo.put("evaluadoresAsignados", estado.getAnteproyectoEvaluadoresAsignados());
+        response.put("anteproyecto", anteproyectoInfo);
+
+        // Participantes
+        Map<String, Object> participantes = new HashMap<>();
+        if (estado.getDirectorId() != null) {
+            participantes.put("director", Map.of(
+                    "id", estado.getDirectorId(),
+                    "nombre", estado.getDirectorNombre() != null ? estado.getDirectorNombre() : "No asignado"
+            ));
+        }
+        if (estado.getCodirectorId() != null) {
+            participantes.put("codirector", Map.of(
+                    "id", estado.getCodirectorId(),
+                    "nombre", estado.getCodirectorNombre() != null ? estado.getCodirectorNombre() : "No asignado"
+            ));
+        }
+        response.put("participantes", participantes);
+
+        // Estudiantes
+        Map<String, Object> estudiantes = new HashMap<>();
+        if (estado.getEstudiante1Id() != null) {
+            estudiantes.put("estudiante1", Map.of(
+                    "id", estado.getEstudiante1Id(),
+                    "nombre", estado.getEstudiante1Nombre() != null ? estado.getEstudiante1Nombre() : "Sin nombre"
+            ));
+        }
+        if (estado.getEstudiante2Id() != null) {
+            estudiantes.put("estudiante2", Map.of(
+                    "id", estado.getEstudiante2Id(),
+                    "nombre", estado.getEstudiante2Nombre() != null ? estado.getEstudiante2Nombre() : "Sin nombre"
+            ));
+        }
+        response.put("estudiantes", estudiantes);
+
+        log.info("✅ Estado consultado exitosamente para estudiante {}", estudianteId);
         return ResponseEntity.ok(response);
     }
 
@@ -369,6 +564,24 @@ public class ProgressController {
                     "id", proyecto.getDirectorId(),
                     "nombre", proyecto.getDirectorNombre() != null ? proyecto.getDirectorNombre() : "No asignado"
             ));
+        }
+
+        // Agregar información de estudiantes
+        Map<String, Object> estudiantes = new HashMap<>();
+        if (proyecto.getEstudiante1Id() != null) {
+            estudiantes.put("estudiante1", Map.of(
+                    "id", proyecto.getEstudiante1Id(),
+                    "nombre", proyecto.getEstudiante1Nombre() != null ? proyecto.getEstudiante1Nombre() : "Sin nombre"
+            ));
+        }
+        if (proyecto.getEstudiante2Id() != null) {
+            estudiantes.put("estudiante2", Map.of(
+                    "id", proyecto.getEstudiante2Id(),
+                    "nombre", proyecto.getEstudiante2Nombre() != null ? proyecto.getEstudiante2Nombre() : "Sin nombre"
+            ));
+        }
+        if (!estudiantes.isEmpty()) {
+            dto.put("estudiantes", estudiantes);
         }
 
         return dto;

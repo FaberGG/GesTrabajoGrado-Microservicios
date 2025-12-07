@@ -15,10 +15,16 @@ import java.util.Optional;
 public interface ProyectoEstadoRepository extends JpaRepository<ProyectoEstado, Long> {
 
     /**
-     * Buscar proyectos donde el usuario es director o codirector
+     * Buscar proyectos donde el usuario es director, codirector o estudiante
      */
-    @Query("SELECT p FROM ProyectoEstado p WHERE p.directorId = :userId OR p.codirectorId = :userId")
+    @Query("SELECT p FROM ProyectoEstado p WHERE p.directorId = :userId OR p.codirectorId = :userId OR p.estudiante1Id = :userId OR p.estudiante2Id = :userId")
     List<ProyectoEstado> findProyectosByUsuario(@Param("userId") Long userId);
+
+    /**
+     * Buscar proyecto por ID de estudiante
+     */
+    @Query("SELECT p FROM ProyectoEstado p WHERE p.estudiante1Id = :estudianteId OR p.estudiante2Id = :estudianteId")
+    Optional<ProyectoEstado> findByEstudianteId(@Param("estudianteId") Long estudianteId);
 
     /**
      * Buscar proyectos por estado actual

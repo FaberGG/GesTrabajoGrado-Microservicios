@@ -15,7 +15,9 @@ import java.time.LocalDateTime;
 @Table(name = "proyecto_estado", indexes = {
         @Index(name = "idx_estado_actual", columnList = "estado_actual"),
         @Index(name = "idx_fase", columnList = "fase"),
-        @Index(name = "idx_director", columnList = "director_id")
+        @Index(name = "idx_director", columnList = "director_id"),
+        @Index(name = "idx_estudiante1", columnList = "estudiante1_id"),
+        @Index(name = "idx_estudiante2", columnList = "estudiante2_id")
 })
 @Data
 @NoArgsConstructor
@@ -85,6 +87,25 @@ public class ProyectoEstado {
 
     @Column(name = "codirector_nombre", length = 200)
     private String codirectorNombre;
+
+    // ========== ESTUDIANTES ==========
+    @Column(name = "estudiante1_id")
+    private Long estudiante1Id;
+
+    @Column(name = "estudiante1_nombre", length = 200)
+    private String estudiante1Nombre;
+
+    @Column(name = "estudiante1_email", length = 200)
+    private String estudiante1Email;
+
+    @Column(name = "estudiante2_id")
+    private Long estudiante2Id;
+
+    @Column(name = "estudiante2_nombre", length = 200)
+    private String estudiante2Nombre;
+
+    @Column(name = "estudiante2_email", length = 200)
+    private String estudiante2Email;
 
     // ========== AUDITORÍA ==========
     @Column(name = "ultima_actualizacion")
