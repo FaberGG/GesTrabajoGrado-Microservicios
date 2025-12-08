@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <!-- Appender para consola con formato legible -->
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlationId}] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Appender JSON para todas las notificaciones -->
+  <appender name="NOTIFICATION_JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/notifications-all.json</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>logs/archive/notifications-all-%d{yyyy-MM-dd}.json</fileNamePattern>
+      <maxHistory>30</maxHistory>
+      <totalSizeCap>1GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <includeMdcKeyName>correlationId</includeMdcKeyName>
+    </encoder>
+  </appender>
+
+  <!-- Logger específico para notificaciones -->
+  <logger name="NOTIFICATION_LOGGER" level="INFO" additivity="false">
+    <appender-ref ref="STDOUT"/>
+    <appender-ref ref="NOTIFICATION_JSON_FILE"/>
+  </logger>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+</configuration>

@@ -1,0 +1,84 @@
+[
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/submission/formatoA",
+      "headers": {
+        "X-User-Role": ["DOCENTE"]
+      }
+    },
+    "httpResponse": {
+      "statusCode": 201,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "id": "formato-a-001",
+        "status": "SUBMITTED",
+        "message": "Formato A recibido correctamente",
+        "submittedBy": "DOCENTE",
+        "timestamp": "2025-10-15T10:30:00Z"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/submission/anteproyecto"
+    },
+    "httpResponse": {
+      "statusCode": 201,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "id": "anteproyecto-001",
+        "status": "SUBMITTED",
+        "message": "Anteproyecto recibido correctamente",
+        "timestamp": "2025-10-15T10:30:00Z"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/api/submission/list"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "submissions": [
+          {
+            "id": "formato-a-001",
+            "type": "FORMATO_A",
+            "status": "APPROVED"
+          },
+          {
+            "id": "anteproyecto-001",
+            "type": "ANTEPROYECTO",
+            "status": "PENDING"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/health"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "status": "UP",
+        "service": "submission-service"
+      }
+    }
+  }
+]

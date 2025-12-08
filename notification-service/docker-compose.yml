@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  notification-postgres:
+    image: postgres:15-alpine
+    container_name: notification-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: noti_user
+      POSTGRES_PASSWORD: noti_pass
+      POSTGRES_DB: notification_db
+    ports:
+      - "5435:5435"
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U noti_user -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - notification-network
+
+  rabbitmq-local:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-local
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq-local-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - notification-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notification-service-local
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SERVER_PORT=8083
+      - JWT_SECRET=test-secret-key-for-jwt-validation-minimum-256-bits-long
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://notification-postgres:5432/notification_db
+      - SPRING_DATASOURCE_USERNAME=noti_user
+      - SPRING_DATASOURCE_PASSWORD=noti_pass
+      - SPRING_RABBITMQ_HOST=rabbitmq-local
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - NOTIFICATION_MAIL_MOCK=true
+    depends_on:
+      notification-postgres:
+        condition: service_healthy
+      rabbitmq-local:
+        condition: service_healthy
+    networks:
+      - notification-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  notification-network:
+    driver: bridge
+
+volumes:
+  notification-db-data:
+    driver: local
+  rabbitmq-local-data:
+    driver: local
