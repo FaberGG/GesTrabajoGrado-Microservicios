@@ -86,7 +86,7 @@ public class SubmissionService implements ISubmissionService {
 
     /**
      * Presentar el formato A al coordinador
-     * Transición: FORMATO_A_DILIGENCIADO -> PRESENTADO_AL_COORDINADOR
+     * Transición: FORMATO_A_DILIGENCIADO -> EN_EVALUACION_COORDINADOR
      */
     public SubmissionResponseDTO presentarAlCoordinador(Long id) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
@@ -100,28 +100,15 @@ public class SubmissionService implements ISubmissionService {
         return convertirADTO(actualizado);
     }
 
-    /**
-     * Enviar el formato A al comité para evaluación
-     * Transición: PRESENTADO_AL_COORDINADOR -> EN_EVALUACION_COMITE
-     */
-    public SubmissionResponseDTO enviarAComite(Long id) {
-        ProyectoSubmission proyecto = obtenerProyectoPorId(id);
-
-        // Delegar al patrón State
-        proyecto.enviarAComite();
-
-        ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-        System.out.println("📨 Proyecto " + id + " enviado al comité para evaluación");
-
-        return convertirADTO(actualizado);
-    }
 
     /**
-     * Evaluar el formato A (aprobar o rechazar)
-     * Transiciones posibles desde EN_EVALUACION_COMITE:
-     * - Si aprueba -> ACEPTADO_POR_COMITE
-     * - Si rechaza y intentos < 3 -> CORRECCIONES_COMITE
-     * - Si rechaza y intentos >= 3 -> RECHAZADO_POR_COMITE
+     * Evaluar el formato A (aprobar o rechazar) - RF-3
+     * El COORDINADOR evalúa el formato A.
+     *
+     * Transiciones posibles desde EN_EVALUACION_COORDINADOR:
+     * - Si aprueba → FORMATO_A_APROBADO
+     * - Si rechaza y intentos < 3 → CORRECCIONES_SOLICITADAS
+     * - Si rechaza y intentos >= 3 → FORMATO_A_RECHAZADO
      */
     public SubmissionResponseDTO evaluar(Long id, EvaluacionDTO evaluacion) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
@@ -132,9 +119,9 @@ public class SubmissionService implements ISubmissionService {
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
 
         if (evaluacion.getAprobado()) {
-            System.out.println("✅ Proyecto " + id + " APROBADO por el comité");
+            System.out.println("✅ Proyecto " + id + " APROBADO por el coordinador");
         } else {
-            System.out.println("❌ Proyecto " + id + " RECHAZADO (Intento " +
+            System.out.println("❌ Proyecto " + id + " RECHAZADO por el coordinador (Intento " +
                              actualizado.getNumeroIntentos() + "/3)");
         }
 
@@ -143,7 +130,7 @@ public class SubmissionService implements ISubmissionService {
 
     /**
      * Subir una nueva versión del formato A tras correcciones
-     * Transición: CORRECCIONES_COMITE -> EN_EVALUACION_COMITE
+     * Transición: CORRECCIONES_SOLICITADAS → EN_EVALUACION_COORDINADOR
      */
     public SubmissionResponseDTO subirNuevaVersion(Long id) {
         ProyectoSubmission proyecto = obtenerProyectoPorId(id);
@@ -152,7 +139,7 @@ public class SubmissionService implements ISubmissionService {
         proyecto.subirNuevaVersion();
 
         ProyectoSubmission actualizado = submissionRepository.save(proyecto);
-        System.out.println("🔄 Proyecto " + id + " - Nueva versión subida, reenviando al comité");
+        System.out.println("🔄 Proyecto " + id + " - Nueva versión subida, reenviando al coordinador");
 
         return convertirADTO(actualizado);
     }
@@ -445,15 +432,21 @@ public class SubmissionService implements ISubmissionService {
         view.setTitulo(proyecto.getTitulo());
         view.setVersion(proyecto.getNumeroIntentos());
 
-        // Mapear estado del proyecto a estado del formato - SIEMPRE establecer un estado
-        if ("FORMATO_A_DILIGENCIADO".equals(proyecto.getEstadoNombre()) ||
-            "PRESENTADO_AL_COORDINADOR".equals(proyecto.getEstadoNombre()) ||
-            "EN_EVALUACION_COMITE".equals(proyecto.getEstadoNombre())) {
+        // Mapear estado del proyecto a estado del formato
+        // Soporta tanto estados nuevos como antiguos para compatibilidad con BD
+        String estado = proyecto.getEstadoNombre();
+        if ("FORMATO_A_DILIGENCIADO".equals(estado) ||
+            "EN_EVALUACION_COORDINADOR".equals(estado) ||
+            "PRESENTADO_AL_COORDINADOR".equals(estado) ||
+            "EN_EVALUACION_COMITE".equals(estado)) {
             view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.PENDIENTE);
-        } else if ("ACEPTADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
+        } else if ("FORMATO_A_APROBADO".equals(estado) ||
+                   "ACEPTADO_POR_COMITE".equals(estado)) {
             view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.APROBADO);
-        } else if ("RECHAZADO_POR_COMITE".equals(proyecto.getEstadoNombre()) ||
-                   "CORRECCIONES_COMITE".equals(proyecto.getEstadoNombre())) {
+        } else if ("FORMATO_A_RECHAZADO".equals(estado) ||
+                   "CORRECCIONES_SOLICITADAS".equals(estado) ||
+                   "RECHAZADO_POR_COMITE".equals(estado) ||
+                   "CORRECCIONES_COMITE".equals(estado)) {
             view.setEstado(co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato.RECHAZADO);
         } else {
             // Valor por defecto
@@ -520,8 +513,9 @@ public class SubmissionService implements ISubmissionService {
             throw new IllegalArgumentException("Solo el director del proyecto puede reenviar el Formato A");
         }
 
-        // 3. Validar que no está rechazado definitivamente
-        if ("RECHAZADO_POR_COMITE".equals(proyecto.getEstadoNombre())) {
+        // 3. Validar que no está rechazado definitivamente (soporta nombres antiguos y nuevos)
+        String estadoActual = proyecto.getEstadoNombre();
+        if ("FORMATO_A_RECHAZADO".equals(estadoActual) || "RECHAZADO_POR_COMITE".equals(estadoActual)) {
             throw new IllegalArgumentException("El proyecto fue rechazado definitivamente, no se puede reenviar");
         }
 
@@ -654,10 +648,10 @@ public class SubmissionService implements ISubmissionService {
         log.info("🔍 Proyecto encontrado: ID={}, Estado actual={}, Intento={}/3",
                 proyecto.getId(), proyecto.getEstadoNombre(), proyecto.getNumeroIntentos());
 
-        // Validar que el proyecto está en un estado evaluable
+        // Validar que el proyecto está en un estado evaluable (soporta nuevos y antiguos nombres)
         String estadoActual = proyecto.getEstadoNombre();
-        if (!"EN_EVALUACION_COMITE".equals(estadoActual)) {
-            log.warn("⚠️ El proyecto no está en estado EN_EVALUACION_COMITE. Estado actual: {}",
+        if (!"EN_EVALUACION_COORDINADOR".equals(estadoActual) && !"EN_EVALUACION_COMITE".equals(estadoActual)) {
+            log.warn("⚠️ El proyecto no está en estado EN_EVALUACION_COORDINADOR. Estado actual: {}",
                     estadoActual);
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -711,12 +705,13 @@ public class SubmissionService implements ISubmissionService {
 
         log.info("✅ Validación de director exitosa: Usuario {} es el director", userId);
 
-        // 4. Validar que el Formato A está APROBADO (estado ACEPTADO_POR_COMITE)
-        if (!"ACEPTADO_POR_COMITE".equals(proyectoSubmission.getEstadoNombre())) {
+        // 4. Validar que el Formato A está APROBADO (soporta nuevos y antiguos nombres de estado)
+        String estadoFormato = proyectoSubmission.getEstadoNombre();
+        if (!"FORMATO_A_APROBADO".equals(estadoFormato) && !"ACEPTADO_POR_COMITE".equals(estadoFormato)) {
             log.error("❌ El Formato A del proyecto {} NO está aprobado (estado actual: {})",
-                    proyectoSubmission.getId(), proyectoSubmission.getEstadoNombre());
+                    proyectoSubmission.getId(), estadoFormato);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "El Formato A debe estar aprobado (ACEPTADO_POR_COMITE) antes de subir anteproyecto");
+                    "El Formato A debe estar aprobado antes de subir anteproyecto. Estado actual: " + estadoFormato);
         }
 
         log.info("✅ Formato A está aprobado, se puede subir anteproyecto");

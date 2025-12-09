@@ -198,7 +198,7 @@ public class FormatoAController {
 
     /**
      * Lista Formato A pendientes de evaluación (para el Review Service).
-     * Estados: PRESENTADO_AL_COORDINADOR, EN_EVALUACION_COMITE
+     * Estados: EN_EVALUACION_COORDINADOR, CORRECCIONES_SOLICITADAS
      */
     @GetMapping(path = "/pendientes", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<FormatoAPage> listarFormatosAPendientes(

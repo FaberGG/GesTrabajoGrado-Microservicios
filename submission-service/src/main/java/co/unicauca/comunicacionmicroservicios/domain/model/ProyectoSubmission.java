@@ -84,6 +84,29 @@ public class ProyectoSubmission {
     @Column(name = "ruta_carta")
     private String rutaCarta;
 
+    // ==========================================
+    // CAMPOS PARA ANTEPROYECTO (RF-6, RF-7, RF-8)
+    // ==========================================
+
+    // Ruta del archivo del anteproyecto
+    @Column(name = "ruta_anteproyecto")
+    private String rutaAnteproyecto;
+
+    // Fecha de envío del anteproyecto
+    @Column(name = "fecha_envio_anteproyecto")
+    private LocalDateTime fechaEnvioAnteproyecto;
+
+    // IDs de los evaluadores asignados por el Jefe de Departamento
+    @Column(name = "evaluador_1_id")
+    private Long evaluador1Id;
+
+    @Column(name = "evaluador_2_id")
+    private Long evaluador2Id;
+
+    // Comentarios de los evaluadores del anteproyecto
+    @Column(name = "comentarios_anteproyecto", columnDefinition = "TEXT")
+    private String comentariosAnteproyecto;
+
     // Constructor por defecto
     public ProyectoSubmission() {
         this.fechaCreacion = LocalDateTime.now();
@@ -96,15 +119,13 @@ public class ProyectoSubmission {
 
     // Métodos del patrón State (delegan al estado actual)
 
+    // --- OPERACIONES FORMATO A ---
+
     public void presentarAlCoordinador() {
         estadoActual.presentarAlCoordinador(this);
         actualizarFechaModificacion();
     }
 
-    public void enviarAComite() {
-        estadoActual.enviarAComite(this);
-        actualizarFechaModificacion();
-    }
 
     public void evaluar(boolean aprobado, String comentarios) {
         estadoActual.evaluar(this, aprobado, comentarios);
@@ -116,6 +137,23 @@ public class ProyectoSubmission {
         actualizarFechaModificacion();
     }
 
+    // --- OPERACIONES ANTEPROYECTO ---
+
+    public void subirAnteproyecto(String rutaAnteproyecto) {
+        estadoActual.subirAnteproyecto(this, rutaAnteproyecto);
+        actualizarFechaModificacion();
+    }
+
+    public void asignarEvaluadores(Long evaluador1Id, Long evaluador2Id) {
+        estadoActual.asignarEvaluadores(this, evaluador1Id, evaluador2Id);
+        actualizarFechaModificacion();
+    }
+
+    public void evaluarAnteproyecto(boolean aprobado, String comentarios) {
+        estadoActual.evaluarAnteproyecto(this, aprobado, comentarios);
+        actualizarFechaModificacion();
+    }
+
     // Método para reconstruir el estado desde la BD
     @PostLoad
     public void reconstruirEstado() {
@@ -123,18 +161,33 @@ public class ProyectoSubmission {
     }
 
     // Método auxiliar para obtener la instancia del estado según su nombre
+    // Incluye compatibilidad con nombres antiguos de estados para datos existentes en BD
     private IEstadoSubmission obtenerEstadoPorNombre(String nombre) {
         if (nombre == null) {
             return FormatoADiligenciadoState.getInstance();
         }
 
         return switch (nombre) {
+            // Estados Formato A (RF-3: Coordinador evalúa)
             case "FORMATO_A_DILIGENCIADO" -> FormatoADiligenciadoState.getInstance();
-            case "PRESENTADO_AL_COORDINADOR" -> PresentadoAlCoordinadorState.getInstance();
-            case "EN_EVALUACION_COMITE" -> EnEvaluacionComiteState.getInstance();
-            case "CORRECCIONES_COMITE" -> CorreccionesComiteState.getInstance();
-            case "ACEPTADO_POR_COMITE" -> AceptadoPorComiteState.getInstance();
-            case "RECHAZADO_POR_COMITE" -> RechazadoPorComiteState.getInstance();
+            case "EN_EVALUACION_COORDINADOR" -> EnEvaluacionCoordinadorState.getInstance();
+            case "CORRECCIONES_SOLICITADAS" -> CorreccionesSolicitadasState.getInstance();
+            case "FORMATO_A_APROBADO" -> FormatoAAprobadoState.getInstance();
+            case "FORMATO_A_RECHAZADO" -> FormatoARechazadoState.getInstance();
+
+            // Estados Anteproyecto (RF-6, RF-7, RF-8)
+            case "ANTEPROYECTO_ENVIADO" -> AnteproyectoEnviadoState.getInstance();
+            case "ANTEPROYECTO_EN_EVALUACION" -> AnteproyectoEnEvaluacionState.getInstance();
+            case "ANTEPROYECTO_APROBADO" -> AnteproyectoAprobadoState.getInstance();
+            case "ANTEPROYECTO_RECHAZADO" -> AnteproyectoRechazadoState.getInstance();
+
+            // Compatibilidad con nombres antiguos en BD (mapean a nuevos estados)
+            case "PRESENTADO_AL_COORDINADOR" -> EnEvaluacionCoordinadorState.getInstance();
+            case "EN_EVALUACION_COMITE" -> EnEvaluacionCoordinadorState.getInstance();
+            case "CORRECCIONES_COMITE" -> CorreccionesSolicitadasState.getInstance();
+            case "ACEPTADO_POR_COMITE" -> FormatoAAprobadoState.getInstance();
+            case "RECHAZADO_POR_COMITE" -> FormatoARechazadoState.getInstance();
+
             default -> FormatoADiligenciadoState.getInstance();
         };
     }
@@ -292,6 +345,50 @@ public class ProyectoSubmission {
 
     public void setRutaCarta(String rutaCarta) {
         this.rutaCarta = rutaCarta;
+    }
+
+    // ==========================================
+    // GETTERS Y SETTERS PARA ANTEPROYECTO
+    // ==========================================
+
+    public String getRutaAnteproyecto() {
+        return rutaAnteproyecto;
+    }
+
+    public void setRutaAnteproyecto(String rutaAnteproyecto) {
+        this.rutaAnteproyecto = rutaAnteproyecto;
+    }
+
+    public LocalDateTime getFechaEnvioAnteproyecto() {
+        return fechaEnvioAnteproyecto;
+    }
+
+    public void setFechaEnvioAnteproyecto(LocalDateTime fechaEnvioAnteproyecto) {
+        this.fechaEnvioAnteproyecto = fechaEnvioAnteproyecto;
+    }
+
+    public Long getEvaluador1Id() {
+        return evaluador1Id;
+    }
+
+    public void setEvaluador1Id(Long evaluador1Id) {
+        this.evaluador1Id = evaluador1Id;
+    }
+
+    public Long getEvaluador2Id() {
+        return evaluador2Id;
+    }
+
+    public void setEvaluador2Id(Long evaluador2Id) {
+        this.evaluador2Id = evaluador2Id;
+    }
+
+    public String getComentariosAnteproyecto() {
+        return comentariosAnteproyecto;
+    }
+
+    public void setComentariosAnteproyecto(String comentariosAnteproyecto) {
+        this.comentariosAnteproyecto = comentariosAnteproyecto;
     }
 
     public boolean esEstadoFinal() {

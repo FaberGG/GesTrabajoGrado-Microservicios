@@ -6,7 +6,9 @@ import co.unicauca.comunicacionmicroservicios.domain.state.EstadoSubmissionBase;
 /**
  * Estado 1: Formato A Diligenciado
  * Estado inicial cuando el docente ha llenado el Formato A
- * Puede transicionar a: PresentadoAlCoordinadorState
+ *
+ * Transiciones posibles:
+ * - presentarAlCoordinador() hacia EnEvaluacionCoordinadorState
  */
 public class FormatoADiligenciadoState extends EstadoSubmissionBase {
 
@@ -23,13 +25,14 @@ public class FormatoADiligenciadoState extends EstadoSubmissionBase {
 
     @Override
     public void presentarAlCoordinador(ProyectoSubmission proyecto) {
-        // Validar que el formato A esté completo
+        // Validar que el formato A este completo
         if (proyecto.getTitulo() == null || proyecto.getTitulo().isEmpty()) {
-            throw new IllegalStateException("El proyecto debe tener un título antes de presentarse");
+            throw new IllegalStateException("El proyecto debe tener un titulo antes de presentarse");
         }
 
-        System.out.println("📤 Presentando Formato A al coordinador...");
-        cambiarEstado(proyecto, PresentadoAlCoordinadorState.getInstance());
+        System.out.println("Presentando Formato A al coordinador para evaluacion...");
+        // Transicion directa a evaluacion por el coordinador (RF-3)
+        cambiarEstado(proyecto, EnEvaluacionCoordinadorState.getInstance());
     }
 
     @Override

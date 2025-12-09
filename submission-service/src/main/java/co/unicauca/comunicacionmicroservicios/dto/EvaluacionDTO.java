@@ -3,7 +3,7 @@ package co.unicauca.comunicacionmicroservicios.dto;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * DTO para la evaluación del comité
+ * DTO para la evaluación del coordinador (RF-3)
  */
 public class EvaluacionDTO {
 

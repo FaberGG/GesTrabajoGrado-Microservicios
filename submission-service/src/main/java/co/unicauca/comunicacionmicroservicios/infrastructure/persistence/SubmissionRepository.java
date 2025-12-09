@@ -33,8 +33,9 @@ public interface SubmissionRepository extends JpaRepository<ProyectoSubmission, 
 
     /**
      * Buscar proyectos que no están en estado final
+     * Estados finales: FORMATO_A_RECHAZADO, ANTEPROYECTO_APROBADO, ANTEPROYECTO_RECHAZADO
      */
-    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre NOT IN ('ACEPTADO_POR_COMITE', 'RECHAZADO_POR_COMITE')")
+    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre NOT IN ('FORMATO_A_RECHAZADO', 'ANTEPROYECTO_APROBADO', 'ANTEPROYECTO_RECHAZADO', 'RECHAZADO_POR_COMITE')")
     List<ProyectoSubmission> findProyectosEnProceso();
 
     /**
@@ -43,8 +44,29 @@ public interface SubmissionRepository extends JpaRepository<ProyectoSubmission, 
     Long countByEstadoNombre(String estadoNombre);
 
     /**
-     * Buscar Formatos A pendientes de evaluación (estado FORMATO_A_DILIGENCIADO, PRESENTADO_AL_COORDINADOR o EN_EVALUACION_COMITE)
+     * Buscar Formatos A pendientes de evaluación
+     * Incluye compatibilidad con estados antiguos en BD
      */
-    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre IN ('FORMATO_A_DILIGENCIADO', 'PRESENTADO_AL_COORDINADOR', 'EN_EVALUACION_COMITE') ORDER BY p.fechaCreacion ASC")
+    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre IN ('FORMATO_A_DILIGENCIADO', 'EN_EVALUACION_COORDINADOR', 'CORRECCIONES_SOLICITADAS', 'PRESENTADO_AL_COORDINADOR', 'EN_EVALUACION_COMITE', 'CORRECCIONES_COMITE') ORDER BY p.fechaCreacion ASC")
     Page<ProyectoSubmission> findFormatosAPendientes(Pageable pageable);
+
+    /**
+     * Buscar anteproyectos pendientes de asignación de evaluadores
+     * Estado: ANTEPROYECTO_ENVIADO
+     */
+    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre = 'ANTEPROYECTO_ENVIADO' ORDER BY p.fechaEnvioAnteproyecto ASC")
+    List<ProyectoSubmission> findAnteproyectosPendientesAsignacion();
+
+    /**
+     * Buscar anteproyectos en evaluación
+     * Estado: ANTEPROYECTO_EN_EVALUACION
+     */
+    @Query("SELECT p FROM ProyectoSubmission p WHERE p.estadoNombre = 'ANTEPROYECTO_EN_EVALUACION'")
+    List<ProyectoSubmission> findAnteproyectosEnEvaluacion();
+
+    /**
+     * Buscar anteproyectos asignados a un evaluador específico
+     */
+    @Query("SELECT p FROM ProyectoSubmission p WHERE (p.evaluador1Id = :evaluadorId OR p.evaluador2Id = :evaluadorId) AND p.estadoNombre = 'ANTEPROYECTO_EN_EVALUACION'")
+    List<ProyectoSubmission> findAnteproyectosPorEvaluador(Long evaluadorId);
 }

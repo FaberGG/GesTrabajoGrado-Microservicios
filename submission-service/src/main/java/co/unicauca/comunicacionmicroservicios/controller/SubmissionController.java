@@ -26,7 +26,6 @@ import java.util.List;
  * - GET    /api/submissions/docente/{docenteId}      - Listar por docente
  * - GET    /api/submissions/en-proceso               - Listar proyectos en proceso
  * - PUT    /api/submissions/{id}/presentar           - Presentar al coordinador
- * - PUT    /api/submissions/{id}/enviar-evaluacion   - Enviar al comité
  * - PUT    /api/submissions/{id}/evaluar             - Evaluar (aprobar/rechazar)
  * - PUT    /api/submissions/{id}/subir-nueva-version - Subir nueva versión
  */
@@ -111,8 +110,8 @@ public class SubmissionController {
 
     /**
      * PUT /api/submissions/{id}/presentar
-     * Presentar el formato A al coordinador
-     * Transición: FORMATO_A_DILIGENCIADO -> PRESENTADO_AL_COORDINADOR
+     * Presentar el formato A al coordinador para evaluacion
+     * Transicion: FORMATO_A_DILIGENCIADO -> EN_EVALUACION_COORDINADOR
      */
     @PutMapping("/{id}/presentar")
     public ResponseEntity<?> presentarAlCoordinador(@PathVariable Long id) {
@@ -128,32 +127,14 @@ public class SubmissionController {
         }
     }
 
-    /**
-     * PUT /api/submissions/{id}/enviar-evaluacion
-     * Enviar el formato A al comité para evaluación
-     * Transición: PRESENTADO_AL_COORDINADOR -> EN_EVALUACION_COMITE
-     */
-    @PutMapping("/{id}/enviar-evaluacion")
-    public ResponseEntity<?> enviarAComite(@PathVariable Long id) {
-        try {
-            SubmissionResponseDTO response = submissionService.enviarAComite(id);
-            return ResponseEntity.ok(response);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ErrorResponse(e.getMessage()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ErrorResponse("Proyecto no encontrado"));
-        }
-    }
 
     /**
      * PUT /api/submissions/{id}/evaluar
-     * Evaluar el formato A (aprobar o rechazar)
-     * Transiciones desde EN_EVALUACION_COMITE:
-     * - Si aprueba -> ACEPTADO_POR_COMITE
-     * - Si rechaza y intentos < 3 -> CORRECCIONES_COMITE
-     * - Si rechaza y intentos >= 3 -> RECHAZADO_POR_COMITE
+     * El COORDINADOR evalúa el formato A (aprobar o rechazar) - RF-3
+     * Transiciones desde EN_EVALUACION_COORDINADOR:
+     * - Si aprueba → FORMATO_A_APROBADO
+     * - Si rechaza y intentos < 3 → CORRECCIONES_SOLICITADAS
+     * - Si rechaza y intentos >= 3 → FORMATO_A_RECHAZADO
      */
     @PutMapping("/{id}/evaluar")
     public ResponseEntity<?> evaluar(
@@ -174,7 +155,7 @@ public class SubmissionController {
     /**
      * PUT /api/submissions/{id}/subir-nueva-version
      * Subir una nueva versión del formato A tras correcciones
-     * Transición: CORRECCIONES_COMITE -> EN_EVALUACION_COMITE
+     * Transición: CORRECCIONES_SOLICITADAS -> EN_EVALUACION_COORDINADOR
      */
     @PutMapping("/{id}/subir-nueva-version")
     public ResponseEntity<?> subirNuevaVersion(@PathVariable Long id) {
