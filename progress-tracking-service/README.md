@@ -127,6 +127,130 @@ CREATE TABLE proyecto_estado (
 
 ---
 
+## 📦 DTOs (Data Transfer Objects)
+
+El servicio utiliza DTOs para estructurar las respuestas de forma clara y desacoplada de las entidades de base de datos.
+
+### DTOs de Respuesta
+
+#### EstadoProyectoResponseDTO
+
+DTO principal para el estado completo de un proyecto.
+
+```java
+{
+  "proyectoId": 1,
+  "titulo": "Sistema de IA para Agricultura",
+  "modalidad": "INVESTIGACION",
+  "programa": "INGENIERIA_SISTEMAS",
+  "estadoActual": "FORMATO_A_APROBADO",
+  "estadoLegible": "Formato A Aprobado ✅",
+  "fase": "FORMATO_A",
+  "ultimaActualizacion": "2025-11-01T16:00:00",
+  "siguientePaso": "Preparar anteproyecto",
+  "formatoA": { /* FormatoAInfoDTO */ },
+  "anteproyecto": { /* AnteproyectoInfoDTO */ },
+  "participantes": { /* ParticipantesDTO */ },
+  "estudiantes": { /* EstudiantesDTO */ },
+  "tieneProyecto": true
+}
+```
+
+#### HistorialEventoDTO
+
+DTO para un evento del historial.
+
+```java
+{
+  "eventoId": 3,
+  "proyectoId": 1,
+  "tipoEvento": "FORMATO_A_EVALUADO",
+  "fecha": "2025-11-01T16:00:00",
+  "descripcion": "Formato A evaluado",
+  "version": 1,
+  "resultado": "APROBADO",
+  "observaciones": "Muy bien estructurado",
+  "responsable": { /* PersonaDTO */ }
+}
+```
+
+#### HistorialResponseDTO
+
+DTO para respuestas de historial con paginación.
+
+```java
+{
+  "proyectoId": 1,
+  "estudianteId": 1001,
+  "tituloProyecto": "Sistema de IA",
+  "estadoActual": "FORMATO_A_APROBADO",
+  "estadoLegible": "Formato A Aprobado ✅",
+  "fase": "FORMATO_A",
+  "estudiantes": { /* EstudiantesDTO */ },
+  "historial": [ /* Lista de HistorialEventoDTO */ ],
+  "paginaActual": 0,
+  "tamanoPagina": 20,
+  "totalEventos": 15,
+  "totalPaginas": 1
+}
+```
+
+#### ProyectoResumenDTO
+
+DTO para listados y búsquedas de proyectos.
+
+```java
+{
+  "proyectoId": 1,
+  "titulo": "Sistema de IA",
+  "estadoActual": "FORMATO_A_APROBADO",
+  "estadoLegible": "Formato A Aprobado ✅",
+  "fase": "FORMATO_A",
+  "modalidad": "INVESTIGACION",
+  "programa": "INGENIERIA_SISTEMAS",
+  "ultimaActualizacion": "2025-11-01T16:00:00",
+  "rol": "DIRECTOR",
+  "director": { /* PersonaDTO */ },
+  "codirector": { /* PersonaDTO */ },
+  "estudiantes": { /* EstudiantesDTO */ }
+}
+```
+
+#### DTOs Auxiliares
+
+- **FormatoAInfoDTO**: Información del estado del Formato A
+- **AnteproyectoInfoDTO**: Información del estado del Anteproyecto
+- **ParticipantesDTO**: Información de director y codirector
+- **EstudiantesDTO**: Información de estudiante1 y estudiante2
+- **PersonaDTO**: Información básica de una persona (id, nombre)
+- **EstudianteDTO**: Información de estudiante (id, nombre, email)
+
+### Mapper
+
+El componente `ProyectoMapper` se encarga de convertir entidades a DTOs:
+
+- `toEstadoProyectoDTO(ProyectoEstado)` → EstadoProyectoResponseDTO
+- `toHistorialEventoDTO(HistorialEvento)` → HistorialEventoDTO
+- `toProyectoResumenDTO(ProyectoEstado)` → ProyectoResumenDTO
+- `toEstadoProyectoNoEncontradoDTO(Long)` → DTO de error
+- `toEstadoSinProyectoDTO(Long)` → DTO para estudiante sin proyecto
+
+### Beneficios de Usar DTOs
+
+✅ **Desacoplamiento**: Las respuestas no dependen de la estructura de la BD
+
+✅ **Claridad**: Estructura clara y documentada para el frontend
+
+✅ **Flexibilidad**: Fácil agregar campos calculados o derivados
+
+✅ **Versionado**: Permite mantener compatibilidad con versiones anteriores
+
+✅ **Validación**: Facilita validación de datos en la capa de presentación
+
+✅ **Seguridad**: No expone campos sensibles o internos de las entidades
+
+---
+
 ## 📡 Eventos Consumidos
 
 El servicio escucha la cola `progress.tracking.queue` y consume los siguientes eventos:
@@ -278,7 +402,7 @@ GET /api/progress/proyectos/{id}/estado
 
 **Descripción**: Obtiene el estado actual completo de un proyecto.
 
-**Respuesta**:
+**Respuesta** (EstadoProyectoResponseDTO):
 
 ```json
 {
@@ -291,6 +415,7 @@ GET /api/progress/proyectos/{id}/estado
   "fase": "FORMATO_A",
   "ultimaActualizacion": "2025-11-01T10:00:00",
   "siguientePaso": "Esperar evaluación del coordinador",
+  "tieneProyecto": true,
   "formatoA": {
     "estado": "EN_EVALUACION",
     "versionActual": 1,
@@ -308,6 +433,13 @@ GET /api/progress/proyectos/{id}/estado
     "director": {
       "id": 12,
       "nombre": "Dr. Juan Pérez"
+    }
+  },
+  "estudiantes": {
+    "estudiante1": {
+      "id": 1001,
+      "nombre": "María García",
+      "email": "maria.garcia@unicauca.edu.co"
     }
   }
 }
@@ -332,7 +464,7 @@ GET /api/progress/proyectos/{id}/historial?page=0&size=20&tipoEvento=FORMATO_A_E
 - `size`: Tamaño de página (default: 20)
 - `tipoEvento`: Filtro por tipo (opcional, separado por comas)
 
-**Respuesta**:
+**Respuesta** (HistorialResponseDTO):
 
 ```json
 {
@@ -349,8 +481,7 @@ GET /api/progress/proyectos/{id}/historial?page=0&size=20&tipoEvento=FORMATO_A_E
       "observaciones": "Muy bien estructurado",
       "responsable": {
         "id": 45,
-        "nombre": "Dr. Coordinador",
-        "rol": "COORDINADOR"
+        "nombre": "Dr. Coordinador"
       }
     },
     {
@@ -364,8 +495,7 @@ GET /api/progress/proyectos/{id}/historial?page=0&size=20&tipoEvento=FORMATO_A_E
       "observaciones": null,
       "responsable": {
         "id": 12,
-        "nombre": "Dr. Juan Pérez",
-        "rol": "DIRECTOR"
+        "nombre": "Dr. Juan Pérez"
       }
     }
   ],
@@ -392,7 +522,7 @@ Headers: X-User-Id: 12
 
 **Descripción**: Lista todos los proyectos donde el usuario es director o codirector.
 
-**Respuesta**:
+**Respuesta** (MisProyectosResponseDTO):
 
 ```json
 {
@@ -404,8 +534,20 @@ Headers: X-User-Id: 12
       "estadoLegible": "Formato A Aprobado ✅",
       "fase": "FORMATO_A",
       "modalidad": "INVESTIGACION",
+      "programa": "INGENIERIA_SISTEMAS",
       "ultimaActualizacion": "2025-11-01T16:00:00",
-      "rol": "DIRECTOR"
+      "rol": "DIRECTOR",
+      "director": {
+        "id": 12,
+        "nombre": "Dr. Juan Pérez"
+      },
+      "estudiantes": {
+        "estudiante1": {
+          "id": 1001,
+          "nombre": "María García",
+          "email": "maria.garcia@unicauca.edu.co"
+        }
+      }
     },
     {
       "proyectoId": 5,
@@ -414,8 +556,24 @@ Headers: X-User-Id: 12
       "estadoLegible": "Anteproyecto en evaluación",
       "fase": "ANTEPROYECTO",
       "modalidad": "PRACTICA_PROFESIONAL",
+      "programa": "INGENIERIA_SISTEMAS",
       "ultimaActualizacion": "2025-11-05T14:00:00",
-      "rol": "CODIRECTOR"
+      "rol": "CODIRECTOR",
+      "director": {
+        "id": 15,
+        "nombre": "Dra. Ana Martínez"
+      },
+      "codirector": {
+        "id": 12,
+        "nombre": "Dr. Juan Pérez"
+      },
+      "estudiantes": {
+        "estudiante1": {
+          "id": 1002,
+          "nombre": "Carlos López",
+          "email": "carlos.lopez@unicauca.edu.co"
+        }
+      }
     }
   ],
   "total": 2
@@ -441,7 +599,7 @@ GET /api/progress/proyectos/buscar?estado=FORMATO_A_EN_EVALUACION_1&fase=FORMATO
 - `fase`: Fase del proyecto (opcional)
 - `programa`: Programa académico (opcional)
 
-**Respuesta**:
+**Respuesta** (BusquedaProyectosResponseDTO):
 
 ```json
 {
@@ -449,15 +607,22 @@ GET /api/progress/proyectos/buscar?estado=FORMATO_A_EN_EVALUACION_1&fase=FORMATO
     {
       "proyectoId": 3,
       "titulo": "Blockchain para Supply Chain",
-      "modalidad": "INVESTIGACION",
-      "programa": "INGENIERIA_SISTEMAS",
       "estadoActual": "FORMATO_A_EN_EVALUACION_1",
       "estadoLegible": "En primera evaluación - Formato A",
       "fase": "FORMATO_A",
+      "modalidad": "INVESTIGACION",
+      "programa": "INGENIERIA_SISTEMAS",
       "ultimaActualizacion": "2025-11-01T09:00:00",
       "director": {
         "id": 15,
         "nombre": "Dra. María López"
+      },
+      "estudiantes": {
+        "estudiante1": {
+          "id": 1003,
+          "nombre": "Pedro Martínez",
+          "email": "pedro.martinez@unicauca.edu.co"
+        }
       }
     }
   ],
@@ -474,6 +639,130 @@ GET /api/progress/proyectos/buscar?estado=FORMATO_A_EN_EVALUACION_1&fase=FORMATO
 
 - **Frontend**: Panel del coordinador para listar proyectos pendientes (RF3)
 - **Frontend**: Panel del jefe de departamento para listar anteproyectos (RF7)
+
+---
+
+### 5. Obtener Estado del Proyecto de un Estudiante
+
+```http
+GET /api/progress/estudiantes/{estudianteId}/estado
+```
+
+**Descripción**: Obtiene el estado del proyecto de un estudiante sin necesidad de conocer el ID del proyecto.
+
+**Respuesta** (EstadoProyectoResponseDTO):
+
+```json
+{
+  "tieneProyecto": true,
+  "estudianteId": 1001,
+  "proyectoId": 1,
+  "titulo": "Sistema de IA para Agricultura",
+  "modalidad": "INVESTIGACION",
+  "programa": "INGENIERIA_SISTEMAS",
+  "estadoActual": "FORMATO_A_APROBADO",
+  "estadoLegible": "Formato A Aprobado ✅",
+  "fase": "FORMATO_A",
+  "ultimaActualizacion": "2025-11-01T16:00:00",
+  "siguientePaso": "Preparar anteproyecto",
+  "formatoA": {
+    "estado": "APROBADO",
+    "versionActual": 1,
+    "intentoActual": 1,
+    "maxIntentos": 3,
+    "fechaUltimoEnvio": "2025-11-01T10:00:00",
+    "fechaUltimaEvaluacion": "2025-11-01T16:00:00"
+  },
+  "participantes": {
+    "director": {
+      "id": 12,
+      "nombre": "Dr. Juan Pérez"
+    }
+  },
+  "estudiantes": {
+    "estudiante1": {
+      "id": 1001,
+      "nombre": "María García",
+      "email": "maria.garcia@unicauca.edu.co"
+    }
+  }
+}
+```
+
+**Caso sin proyecto**:
+
+```json
+{
+  "error": false,
+  "mensaje": "El estudiante no tiene proyectos asignados actualmente",
+  "estudianteId": 1001,
+  "tieneProyecto": false
+}
+```
+
+**Usado en**:
+
+- **Frontend**: Dashboard del estudiante (RF5)
+
+---
+
+### 6. Obtener Historial del Proyecto de un Estudiante
+
+```http
+GET /api/progress/estudiantes/{estudianteId}/historial?page=0&size=20
+```
+
+**Descripción**: Obtiene el historial del proyecto de un estudiante sin necesidad de conocer el ID del proyecto.
+
+**Parámetros**:
+
+- `page`: Número de página (default: 0)
+- `size`: Tamaño de página (default: 20)
+- `tipoEvento`: Filtro por tipo (opcional)
+
+**Respuesta** (HistorialResponseDTO):
+
+```json
+{
+  "estudianteId": 1001,
+  "proyectoId": 1,
+  "tituloProyecto": "Sistema de IA para Agricultura",
+  "estadoActual": "FORMATO_A_APROBADO",
+  "estadoLegible": "Formato A Aprobado ✅",
+  "fase": "FORMATO_A",
+  "estudiantes": {
+    "estudiante1": {
+      "id": 1001,
+      "nombre": "María García",
+      "email": "maria.garcia@unicauca.edu.co"
+    }
+  },
+  "historial": [
+    {
+      "eventoId": 3,
+      "proyectoId": 1,
+      "tipoEvento": "FORMATO_A_EVALUADO",
+      "fecha": "2025-11-01T16:00:00",
+      "descripcion": "Formato A evaluado: APROBADO",
+      "version": 1,
+      "resultado": "APROBADO",
+      "observaciones": "Muy bien estructurado",
+      "responsable": {
+        "id": 45,
+        "nombre": "Dr. Coordinador"
+      }
+    }
+  ],
+  "paginaActual": 0,
+  "tamanoPagina": 20,
+  "totalEventos": 3,
+  "totalPaginas": 1
+}
+```
+
+**Usado en**:
+
+- **Frontend**: Timeline del proyecto para estudiantes
 
 ---
 
