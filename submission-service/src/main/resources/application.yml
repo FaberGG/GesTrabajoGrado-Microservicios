@@ -30,7 +30,17 @@ springdoc:
 # Feature Flags para migración a Arquitectura Hexagonal
 feature:
   hexagonal:
-    enabled: false  # Cambia a true para activar nueva arquitectura
-    debug-mode: false  # true para logging detallado
+    enabled: true  # Arquitectura hexagonal ACTIVADA ✅
+    debug-mode: true  # Logging detallado para debugging
+
+# File Storage Configuration
+file:
+  storage:
+    base-path: ./uploads  # Directorio base para archivos
+
+# Services Configuration
+services:
+  identity:
+    url: http://localhost:8081  # URL del identity-service
 
 
