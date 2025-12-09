@@ -4,6 +4,14 @@ spring:
   profiles:
     active: dev
 
+  # Configuración de archivos multipart
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 15MB
+      file-size-threshold: 2KB
+
 server:
   port: 8082
   compression:
@@ -26,5 +34,21 @@ springdoc:
   show-actuator: true
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
+
+# Feature Flags para migración a Arquitectura Hexagonal
+feature:
+  hexagonal:
+    enabled: true  # Arquitectura hexagonal ACTIVADA ✅
+    debug-mode: true  # Logging detallado para debugging
+
+# File Storage Configuration
+file:
+  storage:
+    base-path: ./uploads  # Directorio base para archivos
+
+# Services Configuration
+services:
+  identity:
+    url: http://localhost:8081  # URL del identity-service
 
 
