@@ -23,60 +23,60 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Datos para crear un nuevo proyecto de trabajo de grado")
 public class CreateSubmissionDTO {
 
-    @Schema(description = "Título del trabajo de grado", 
+    @Schema(description = "Project title", 
             example = "Sistema de Gestión de Inventarios con IoT", 
             required = true)
-    @NotBlank(message = "El título es obligatorio")
-    @Size(max = 300, message = "El título no puede exceder 300 caracteres")
+    @NotBlank(message = "Title is required")
+    @Size(max = 300, message = "Title cannot exceed 300 characters")
     private String titulo;
 
-    @Schema(description = "Descripción general del trabajo de grado", 
+    @Schema(description = "General description of the project", 
             example = "Desarrollo de un sistema IoT para la gestión automatizada de inventarios", 
             nullable = true)
-    @Size(max = 1000, message = "La descripción no puede exceder 1000 caracteres")
+    @Size(max = 1000, message = "Description cannot exceed 1000 characters")
     private String descripcion;
 
-    @Schema(description = "Modalidad del trabajo de grado", 
+    @Schema(description = "Project modality", 
             example = "INVESTIGACION", 
             required = true,
             allowableValues = {"INVESTIGACION", "PRACTICA_PROFESIONAL"})
-    @NotNull(message = "La modalidad es obligatoria")
+    @NotNull(message = "Modality is required")
     private enumModalidad modalidad;
 
-    @Schema(description = "ID del docente director del trabajo", 
+    @Schema(description = "Director professor ID", 
             example = "101", 
             required = true)
-    @NotNull(message = "El ID del docente director es obligatorio")
+    @NotNull(message = "Director professor ID is required")
     private Long docenteDirectorId;
 
-    @Schema(description = "ID del docente codirector (opcional)", 
+    @Schema(description = "Co-director professor ID (optional)", 
             example = "102", 
             nullable = true)
     private Long docenteCodirectorId;
     
-    @Schema(description = "ID del estudiante principal", 
+    @Schema(description = "Student ID", 
             example = "1001", 
             nullable = true)
     private Long estudianteId;
 
-    @Schema(description = "Objetivo general del trabajo de grado", 
+    @Schema(description = "General objective of the project", 
             example = "Desarrollar un sistema de gestión de inventarios utilizando tecnologías IoT", 
             nullable = true)
-    @Size(max = 1000, message = "El objetivo general no puede exceder 1000 caracteres")
+    @Size(max = 1000, message = "General objective cannot exceed 1000 characters")
     private String objetivoGeneral;
     
-    @Schema(description = "Objetivos específicos del trabajo (separados por líneas o formato específico)", 
+    @Schema(description = "Specific objectives (separated by lines or specific format)", 
             example = "1. Diseñar arquitectura IoT\n2. Implementar sensores\n3. Desarrollar dashboard", 
             nullable = true)
-    @Size(max = 2000, message = "Los objetivos específicos no pueden exceder 2000 caracteres")
+    @Size(max = 2000, message = "Specific objectives cannot exceed 2000 characters")
     private String objetivosEspecificos;
 
-    @Schema(description = "Ruta del archivo del Formato A", 
+    @Schema(description = "Path to Formato A file", 
             example = "/uploads/formato-a/documento.pdf", 
             nullable = true)
     private String rutaFormatoA;
     
-    @Schema(description = "Ruta de la carta de aceptación (obligatoria para PRACTICA_PROFESIONAL)", 
+    @Schema(description = "Path to acceptance letter (required for PRACTICA_PROFESIONAL)", 
             example = "/uploads/cartas/carta-aceptacion.pdf", 
             nullable = true)
     private String rutaCarta;

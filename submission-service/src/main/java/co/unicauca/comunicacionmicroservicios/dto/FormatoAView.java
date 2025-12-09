@@ -54,7 +54,8 @@ public class FormatoAView {
     @Schema(description = "Email del docente director", example = "juan.perez@unicauca.edu.co")
     private String docenteDirectorEmail;
     
-    @Schema(description = "Lista de emails de los estudiantes asociados al proyecto")
+    @Schema(description = "List of student emails associated with the project",
+            example = "[\"student1@unicauca.edu.co\", \"student2@unicauca.edu.co\"]")
     private List<String> estudiantesEmails;
 
     // getters/setters

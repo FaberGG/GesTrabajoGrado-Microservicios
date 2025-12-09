@@ -22,44 +22,44 @@ import java.time.LocalDateTime;
 @Schema(description = "Información completa de un proyecto de trabajo de grado")
 public class SubmissionResponseDTO {
 
-    @Schema(description = "Identificador único del proyecto", example = "1")
+    @Schema(description = "Unique project identifier", example = "1")
     private Long id;
     
-    @Schema(description = "Título del trabajo de grado", example = "Sistema de Gestión de Inventarios con IoT")
+    @Schema(description = "Project title", example = "Sistema de Gestión de Inventarios con IoT")
     private String titulo;
     
-    @Schema(description = "Descripción general del proyecto", 
+    @Schema(description = "General project description", 
             example = "Desarrollo de un sistema IoT para gestión de inventarios")
     private String descripcion;
     
-    @Schema(description = "Modalidad del trabajo", example = "INVESTIGACION",
+    @Schema(description = "Project modality", example = "INVESTIGACION",
             allowableValues = {"INVESTIGACION", "PRACTICA_PROFESIONAL"})
     private enumModalidad modalidad;
     
-    @Schema(description = "Fecha y hora de creación del proyecto", example = "2025-11-01T10:00:00")
+    @Schema(description = "Project creation date and time", example = "2025-11-01T10:00:00")
     private LocalDateTime fechaCreacion;
     
-    @Schema(description = "Fecha y hora de la última modificación", example = "2025-11-03T15:30:00")
+    @Schema(description = "Last modification date and time", example = "2025-11-03T15:30:00")
     private LocalDateTime fechaUltimaModificacion;
 
-    @Schema(description = "ID del docente director", example = "101")
+    @Schema(description = "Director professor ID", example = "101")
     private Long docenteDirectorId;
     
-    @Schema(description = "ID del docente codirector (opcional)", example = "102", nullable = true)
+    @Schema(description = "Co-director professor ID (optional)", example = "102", nullable = true)
     private Long docenteCodirectorId;
     
-    @Schema(description = "ID del estudiante", example = "1001", nullable = true)
+    @Schema(description = "Student ID", example = "1001", nullable = true)
     private Long estudianteId;
 
-    @Schema(description = "Objetivo general del trabajo", 
+    @Schema(description = "General objective of the project", 
             example = "Desarrollar un sistema de gestión de inventarios utilizando tecnologías IoT")
     private String objetivoGeneral;
     
-    @Schema(description = "Objetivos específicos del trabajo", 
+    @Schema(description = "Specific objectives", 
             example = "1. Diseñar arquitectura IoT\n2. Implementar sensores\n3. Desarrollar dashboard")
     private String objetivosEspecificos;
 
-    @Schema(description = "Estado actual del proyecto", example = "EN_EVALUACION_COORDINADOR",
+    @Schema(description = "Current project state", example = "EN_EVALUACION_COORDINADOR",
             allowableValues = {"FORMATO_A_DILIGENCIADO", "EN_EVALUACION_COORDINADOR", 
                               "FORMATO_A_APROBADO", "CORRECCIONES_SOLICITADAS", 
                               "FORMATO_A_RECHAZADO", "ANTEPROYECTO_ENVIADO", 
@@ -67,23 +67,23 @@ public class SubmissionResponseDTO {
                               "ANTEPROYECTO_RECHAZADO"})
     private String estadoActual;
     
-    @Schema(description = "Número de intentos de envío del Formato A (máximo 3)", 
+    @Schema(description = "Number of Formato A submission attempts (maximum 3)", 
             example = "1", minimum = "0", maximum = "3")
     private Integer numeroIntentos;
     
-    @Schema(description = "Comentarios del comité evaluador", 
+    @Schema(description = "Evaluation committee comments", 
             example = "Cumple con todos los requisitos", nullable = true)
     private String comentariosComite;
     
-    @Schema(description = "Indica si el estado actual es final (no permite más cambios)", 
+    @Schema(description = "Indicates if the current state is final (no more changes allowed)", 
             example = "false")
     private boolean esEstadoFinal;
 
-    @Schema(description = "Ruta del archivo del Formato A", 
+    @Schema(description = "Path to Formato A file", 
             example = "/uploads/formato-a/documento.pdf", nullable = true)
     private String rutaFormatoA;
     
-    @Schema(description = "Ruta de la carta de aceptación", 
+    @Schema(description = "Path to acceptance letter", 
             example = "/uploads/cartas/carta-aceptacion.pdf", nullable = true)
     private String rutaCarta;
 

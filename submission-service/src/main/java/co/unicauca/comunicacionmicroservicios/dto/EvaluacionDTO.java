@@ -20,16 +20,16 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Datos de evaluación del coordinador para un Formato A")
 public class EvaluacionDTO {
 
-    @Schema(description = "Resultado de la evaluación: true=aprobado, false=rechazado", 
+    @Schema(description = "Evaluation result: true=approved, false=rejected", 
             example = "true", 
             required = true)
-    @NotNull(message = "El resultado de la evaluación es obligatorio")
+    @NotNull(message = "Evaluation result is required")
     private Boolean aprobado;
 
-    @Schema(description = "Comentarios u observaciones del coordinador sobre la evaluación", 
+    @Schema(description = "Coordinator's comments or observations on the evaluation", 
             example = "El proyecto cumple con todos los requisitos metodológicos y técnicos", 
             nullable = true)
-    @Size(max = 2000, message = "Los comentarios no pueden exceder 2000 caracteres")
+    @Size(max = 2000, message = "Comments cannot exceed 2000 characters")
     private String comentarios;
 
     public EvaluacionDTO() {
