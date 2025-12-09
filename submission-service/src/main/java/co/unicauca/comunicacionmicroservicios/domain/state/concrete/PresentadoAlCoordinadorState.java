@@ -6,7 +6,7 @@ import co.unicauca.comunicacionmicroservicios.domain.state.EstadoSubmissionBase;
 /**
  * Estado 2: Presentado al Coordinador
  * El formato A ha sido presentado y espera revisión del coordinador
- * Puede transicionar a: EnEvaluacionComiteState
+ * Puede transicionar a: EnEvaluacionCoordinadorState
  */
 public class PresentadoAlCoordinadorState extends EstadoSubmissionBase {
 
