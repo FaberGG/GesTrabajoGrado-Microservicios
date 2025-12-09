@@ -27,4 +27,10 @@ springdoc:
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
 
+# Feature Flags para migración a Arquitectura Hexagonal
+feature:
+  hexagonal:
+    enabled: false  # Cambia a true para activar nueva arquitectura
+    debug-mode: false  # true para logging detallado
+
 
