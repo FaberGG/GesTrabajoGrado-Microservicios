@@ -75,7 +75,7 @@ class FormatoAEvaluationServiceTest {
 
         when(submissionClient.getFormatoA(formatoAId)).thenReturn(formatoADTO);
         when(evaluationRepository.save(any(Evaluation.class))).thenReturn(savedEval);
-        doNothing().when(submissionClient).updateFormatoAEstado(anyLong(), any(EvaluacionRequest.class));
+        doNothing().when(submissionClient).updateFormatoAEstado(anyLong(), anyBoolean(), anyString(), anyLong());
         doNothing().when(rabbitTemplate).convertAndSend(anyString(), anyString(), any(Object.class));
 
         // When
@@ -89,7 +89,7 @@ class FormatoAEvaluationServiceTest {
         assertTrue(result.notificacionEnviada());
 
         verify(submissionClient).getFormatoA(formatoAId);
-        verify(submissionClient).updateFormatoAEstado(eq(formatoAId), any(EvaluacionRequest.class));
+        verify(submissionClient).updateFormatoAEstado(eq(formatoAId), eq(true), anyString(), anyLong());
         verify(rabbitTemplate).convertAndSend(anyString(), anyString(), any(Object.class));
     }
 

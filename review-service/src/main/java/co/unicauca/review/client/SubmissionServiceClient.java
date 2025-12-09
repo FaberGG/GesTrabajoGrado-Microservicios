@@ -31,10 +31,18 @@ public class SubmissionServiceClient {
         log.debug("Obteniendo Formato A con id: {}", formatoAId);
 
         try {
-            // Usar Map para manejar la deserialización de forma flexible
+            // Usar el endpoint correcto: /api/submissions/{id} (no /formatoA/{id})
             Map<String, Object> response = webClient.get()
-                    .uri("/api/submissions/formatoA/{id}", formatoAId)
+                    .uri("/api/submissions/{id}", formatoAId)
                     .retrieve()
+                    .onStatus(
+                        status -> status.value() == 404,
+                        clientResponse -> {
+                            log.warn("Formato A {} no encontrado en submission-service (404)", formatoAId);
+                            return clientResponse.bodyToMono(String.class)
+                                .map(body -> new ResourceNotFoundException("Formato A no encontrado: " + formatoAId));
+                        }
+                    )
                     .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
                     .block();
 
@@ -42,16 +50,32 @@ public class SubmissionServiceClient {
                 throw new ResourceNotFoundException("Formato A no encontrado: " + formatoAId);
             }
 
-            log.debug("Formato A obtenido del submission-service: {}", response);
+            log.debug("Proyecto obtenido del submission-service: {}", response);
+
+            // El estado viene como String del enum
+            Object estadoObj = response.get("estado");
+            String estado = estadoObj != null ? estadoObj.toString() : "PENDIENTE";
+
+            // Verificar si es un estado final (ya fue evaluado)
+            if ("FORMATO_A_APROBADO".equals(estado)) {
+                log.warn("Intento de obtener Formato A {} que ya fue APROBADO", formatoAId);
+                throw new co.unicauca.review.exception.InvalidStateException(
+                    "El Formato A ya ha sido APROBADO anteriormente. No se puede evaluar nuevamente."
+                );
+            }
+
+            if ("FORMATO_A_RECHAZADO".equals(estado)) {
+                log.warn("Intento de obtener Formato A {} que ya fue RECHAZADO definitivamente", formatoAId);
+                throw new co.unicauca.review.exception.InvalidStateException(
+                    "El Formato A ya ha sido RECHAZADO definitivamente. No se puede evaluar nuevamente."
+                );
+            }
 
             // Mapear a FormatoADTO
             FormatoADTO dto = new FormatoADTO();
             dto.setId(((Number) response.get("id")).longValue());
             dto.setTitulo((String) response.get("titulo"));
-
-            // El estado viene como String del enum
-            Object estadoObj = response.get("estado");
-            dto.setEstado(estadoObj != null ? estadoObj.toString() : "PENDIENTE");
+            dto.setEstado(estado);
 
             dto.setDocenteDirectorNombre((String) response.get("docenteDirectorNombre"));
             dto.setDocenteDirectorEmail((String) response.get("docenteDirectorEmail"));
@@ -61,8 +85,11 @@ public class SubmissionServiceClient {
                     dto.getId(), dto.getTitulo(), dto.getEstado());
 
             return dto;
-        } catch (ResourceNotFoundException e) {
+        } catch (ResourceNotFoundException | co.unicauca.review.exception.InvalidStateException e) {
             throw e;
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException.NotFound e) {
+            log.error("Formato A {} no encontrado (404): {}", formatoAId, e.getMessage());
+            throw new ResourceNotFoundException("Formato A no encontrado: " + formatoAId);
         } catch (Exception e) {
             log.error("Error obteniendo Formato A {}: {}", formatoAId, e.getMessage(), e);
             throw new ResourceNotFoundException("Formato A no encontrado: " + formatoAId);
@@ -150,26 +177,50 @@ public class SubmissionServiceClient {
         );
     }
 
-    public void updateFormatoAEstado(Long formatoAId, EvaluacionRequest request) {
-        log.debug("Actualizando estado de Formato A {}: {}", formatoAId, request);
+    /**
+     * Actualiza el estado del Formato A en submission-service.
+     * Compatible con la nueva arquitectura hexagonal de submission-service.
+     *
+     * @param formatoAId ID del formato A
+     * @param aprobado true si fue aprobado, false si fue rechazado
+     * @param comentarios Comentarios de la evaluación
+     * @param evaluadorId ID del evaluador (se envía en header X-User-Id)
+     */
+    public void updateFormatoAEstado(Long formatoAId, Boolean aprobado, String comentarios, Long evaluadorId) {
+        log.debug("Actualizando estado de Formato A {}: aprobado={}, evaluador={}", formatoAId, aprobado, evaluadorId);
 
         try {
-            webClient.patch()
-                    .uri("/api/submissions/formatoA/{id}/estado", formatoAId)
-                    .header("X-Service", "review")
+            // Crear el DTO compatible con EvaluarFormatoARequest de submission-service
+            EvaluarFormatoARequestDTO request = new EvaluarFormatoARequestDTO(aprobado, comentarios);
 
+            log.debug("Request DTO: {}", request);
+
+            webClient.patch()
+                    .uri("/api/submissions/formatoA/{id}/evaluar", formatoAId)
+                    .header("X-Service", "review")
+                    .header("X-User-Id", String.valueOf(evaluadorId))
                     .bodyValue(request)
                     .retrieve()
                     .bodyToMono(Void.class)
                     .block();
 
-            log.info("Estado de Formato A {} actualizado exitosamente", formatoAId);
+            log.info("✅ Estado de Formato A {} actualizado exitosamente: aprobado={}", formatoAId, aprobado);
         } catch (Exception e) {
-            log.error("Error actualizando estado de Formato A {}: {}", formatoAId, e.getMessage());
+            log.error("❌ Error actualizando estado de Formato A {}: {}", formatoAId, e.getMessage());
             throw new RuntimeException("Error al actualizar estado de Formato A", e);
         }
     }
 
+    /**
+     * Actualiza el estado del Anteproyecto en submission-service.
+     *
+     * NOTA: Este método usa el endpoint legacy. Submission-service (arquitectura hexagonal)
+     * aún no tiene implementado el endpoint de evaluación de anteproyecto.
+     * Cuando se implemente, este método deberá actualizarse similar a updateFormatoAEstado.
+     *
+     * @param anteproyectoId ID del anteproyecto
+     * @param body Map con estado, observaciones y evaluadoPor
+     */
     public void updateAnteproyectoEstado(Long anteproyectoId, Map<String, Object> body) {
         log.debug("Actualizando estado de Anteproyecto {}: {}", anteproyectoId, body);
 
@@ -177,7 +228,6 @@ public class SubmissionServiceClient {
             webClient.patch()
                     .uri("/api/submissions/anteproyectos/{id}/estado", anteproyectoId)
                     .header("X-Service", "review")
-
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(Void.class)
@@ -191,6 +241,39 @@ public class SubmissionServiceClient {
     }
 
     // DTOs internos para comunicación
+
+    /**
+     * DTO compatible con EvaluarFormatoARequest de submission-service.
+     * Arquitectura Hexagonal - Diciembre 2025
+     *
+     * Estructura esperada por submission-service:
+     * {
+     *   "aprobado": true/false,
+     *   "comentarios": "..."
+     * }
+     */
+    public static class EvaluarFormatoARequestDTO {
+        private Boolean aprobado;
+        private String comentarios;
+
+        public EvaluarFormatoARequestDTO() {}
+
+        public EvaluarFormatoARequestDTO(Boolean aprobado, String comentarios) {
+            this.aprobado = aprobado;
+            this.comentarios = comentarios;
+        }
+
+        public Boolean getAprobado() { return aprobado; }
+        public void setAprobado(Boolean aprobado) { this.aprobado = aprobado; }
+
+        public String getComentarios() { return comentarios; }
+        public void setComentarios(String comentarios) { this.comentarios = comentarios; }
+
+        @Override
+        public String toString() {
+            return "EvaluarFormatoARequestDTO{aprobado=" + aprobado + ", comentarios='" + comentarios + "'}";
+        }
+    }
     public static class FormatoADTO {
         private Long id;
         private String titulo;

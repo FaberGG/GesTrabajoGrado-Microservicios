@@ -103,34 +103,59 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
     protected void validateDocumentState(DocumentInfo document) {
         String estado = document.getEstado();
 
-        // Si ya está aprobado o rechazado, informar que ya fue evaluado
-        if ("APROBADO".equals(estado) || "ACEPTADO_POR_COMITE".equals(estado)) {
+        // Estados de submission-service (arquitectura hexagonal)
+        // Estados finales que NO se pueden evaluar
+        if ("FORMATO_A_APROBADO".equals(estado)) {
             throw new InvalidStateException(
                 String.format("Formato A ya fue APROBADO anteriormente. No se puede evaluar nuevamente. Estado actual: %s",
                     estado)
             );
         }
 
-        if ("RECHAZADO".equals(estado) || "RECHAZADO_POR_COMITE".equals(estado)) {
+        if ("FORMATO_A_RECHAZADO".equals(estado)) {
             throw new InvalidStateException(
-                String.format("Formato A ya fue RECHAZADO anteriormente. No se puede evaluar nuevamente. Estado actual: %s",
+                String.format("Formato A ya fue RECHAZADO definitivamente. No se puede evaluar nuevamente. Estado actual: %s",
                     estado)
             );
         }
 
-        // Aceptar estados que permiten evaluación: PENDIENTE, EN_REVISION, EN_EVALUACION_COMITE,
-        // FORMATO_A_DILIGENCIADO, PRESENTADO_AL_COORDINADOR
-        if (!"EN_REVISION".equals(estado) &&
-            !"PENDIENTE".equals(estado) &&
-            !"EN_EVALUACION_COMITE".equals(estado) &&
-            !"FORMATO_A_DILIGENCIADO".equals(estado) &&
-            !"PRESENTADO_AL_COORDINADOR".equals(estado) &&
-            !"CORRECCIONES_COMITE".equals(estado)) {
+        // Estados legacy (por compatibilidad)
+        if ("APROBADO".equals(estado) || "ACEPTADO_POR_COMITE".equals(estado)) {
             throw new InvalidStateException(
-                String.format("Formato A no está en estado evaluable. Estado actual: %s. Estados válidos: PENDIENTE, EN_REVISION, EN_EVALUACION_COMITE, FORMATO_A_DILIGENCIADO, PRESENTADO_AL_COORDINADOR, CORRECCIONES_COMITE",
+                String.format("Formato A ya fue APROBADO anteriormente. Estado actual: %s", estado)
+            );
+        }
+
+        if ("RECHAZADO".equals(estado) || "RECHAZADO_POR_COMITE".equals(estado)) {
+            throw new InvalidStateException(
+                String.format("Formato A ya fue RECHAZADO anteriormente. Estado actual: %s", estado)
+            );
+        }
+
+        // Estados válidos para evaluación (submission-service hexagonal + legacy):
+        // - EN_EVALUACION_COORDINADOR (nuevo estado principal)
+        // - FORMATO_A_DILIGENCIADO (estado inicial)
+        // - CORRECCIONES_SOLICITADAS (cuando se reenvía)
+        // - Estados legacy (por compatibilidad temporal)
+        boolean esEstadoValido =
+            "EN_EVALUACION_COORDINADOR".equals(estado) ||  // ← Estado principal nuevo
+            "FORMATO_A_DILIGENCIADO".equals(estado) ||
+            "CORRECCIONES_SOLICITADAS".equals(estado) ||
+            // Estados legacy (compatibilidad)
+            "PENDIENTE".equals(estado) ||
+            "EN_REVISION".equals(estado) ||
+            "EN_EVALUACION_COMITE".equals(estado) ||
+            "PRESENTADO_AL_COORDINADOR".equals(estado) ||
+            "CORRECCIONES_COMITE".equals(estado);
+
+        if (!esEstadoValido) {
+            throw new InvalidStateException(
+                String.format("Formato A no está en estado evaluable. Estado actual: %s. " +
+                    "Estados válidos: EN_EVALUACION_COORDINADOR, FORMATO_A_DILIGENCIADO, CORRECCIONES_SOLICITADAS",
                     estado)
             );
         }
+
         log.debug("Estado del documento validado correctamente: {}", estado);
     }
 
@@ -138,16 +163,19 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
     protected void updateSubmissionService(Long docId, Decision decision, String obs, Integer evaluatorId) {
         log.info("Actualizando estado de Formato A {} en Submission Service", docId);
 
-        EvaluacionRequest request = new EvaluacionRequest(
-            decision.name(),
-            obs != null ? obs : "",
-            evaluatorId != null ? evaluatorId.longValue() : null
-        );
+        // Convertir Decision enum a Boolean para el nuevo API de submission-service
+        Boolean aprobado = (decision == Decision.APROBADO);
+        String comentarios = obs != null ? obs : "";
+        Long evaluadorIdLong = evaluatorId != null ? evaluatorId.longValue() : null;
 
-        log.debug("Enviando EvaluacionRequest: {}", request);
-        submissionClient.updateFormatoAEstado(docId, request);
-        log.info("Estado actualizado exitosamente en Submission Service: formatoAId={}, estado={}",
-                docId, decision);
+        log.debug("Enviando evaluación: aprobado={}, comentarios={}, evaluadorId={}",
+                  aprobado, comentarios, evaluadorIdLong);
+
+        // Llamar al nuevo endpoint de submission-service (arquitectura hexagonal)
+        submissionClient.updateFormatoAEstado(docId, aprobado, comentarios, evaluadorIdLong);
+
+        log.info("✅ Estado actualizado exitosamente en Submission Service: formatoAId={}, aprobado={}",
+                docId, aprobado);
     }
 
     @Override
