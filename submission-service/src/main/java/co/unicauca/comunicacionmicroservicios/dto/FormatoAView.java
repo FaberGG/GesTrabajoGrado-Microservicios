@@ -1,24 +1,61 @@
 package co.unicauca.comunicacionmicroservicios.dto;
 
 import co.unicauca.comunicacionmicroservicios.domain.model.enumEstadoFormato;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Vista simple de una versión de Formato A. */
+/**
+ * DTO de respuesta para visualizar datos de una versión de Formato A.
+ * Utilizado en las operaciones de lectura (GET) para mostrar información completa de una versión del Formato A.
+ * 
+ * @see FormatoAData DTO de entrada para crear Formato A inicial
+ * @see FormatoAPage DTO contenedor para respuestas paginadas
+ */
+@Schema(description = "Vista completa de una versión de Formato A")
 public class FormatoAView {
+    @Schema(description = "Identificador único de la versión del Formato A", example = "1")
     private Long id;
+    
+    @Schema(description = "Identificador del proyecto de grado asociado", example = "1")
     private Long proyectoId;
-    private String titulo;                    // título del proyecto
-    private Integer version;                  // número de intento
-    private enumEstadoFormato estado;         // PENDIENTE/APROBADO/RECHAZADO
-    private String observaciones;             // si ya fue evaluado
-    private String nombreArchivo;             // nombre original
-    private String pdfUrl;                    // URL o path (si expones)
-    private String cartaUrl;                  // si aplica
+    
+    @Schema(description = "Título del trabajo de grado", example = "Sistema de Gestión de Inventarios con IoT")
+    private String titulo;
+    
+    @Schema(description = "Número de versión/intento (1, 2, o 3)", example = "1", minimum = "1", maximum = "3")
+    private Integer version;
+    
+    @Schema(description = "Estado actual de la versión", example = "PENDIENTE",
+            allowableValues = {"PENDIENTE", "APROBADO", "RECHAZADO"})
+    private enumEstadoFormato estado;
+    
+    @Schema(description = "Observaciones del coordinador al evaluar", 
+            example = "Cumple con todos los requisitos", nullable = true)
+    private String observaciones;
+    
+    @Schema(description = "Nombre original del archivo PDF", example = "formato_a_v1.pdf")
+    private String nombreArchivo;
+    
+    @Schema(description = "URL o ruta del archivo PDF del Formato A", 
+            example = "/app/uploads/formato-a/1/v1/documento.pdf")
+    private String pdfUrl;
+    
+    @Schema(description = "URL o ruta de la carta de aceptación (solo para PRACTICA_PROFESIONAL)", 
+            example = "/app/uploads/formato-a/1/v1/carta.pdf", nullable = true)
+    private String cartaUrl;
+    
+    @Schema(description = "Fecha y hora en que se envió esta versión", example = "2025-11-03T10:30:00")
     private LocalDateTime fechaEnvio;
-    private String docenteDirectorNombre;     // nombre completo del director
-    private String docenteDirectorEmail;      // email del director
-    private List<String> estudiantesEmails;   // lista de emails de estudiantes
+    
+    @Schema(description = "Nombre completo del docente director", example = "Dr. Juan Pérez")
+    private String docenteDirectorNombre;
+    
+    @Schema(description = "Email del docente director", example = "juan.perez@unicauca.edu.co")
+    private String docenteDirectorEmail;
+    
+    @Schema(description = "Lista de emails de los estudiantes asociados al proyecto")
+    private List<String> estudiantesEmails;
 
     // getters/setters
     public Long getId() { return id; }

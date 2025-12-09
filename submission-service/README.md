@@ -605,6 +605,537 @@ Sin contenido en el body.
 
 ---
 
+## 📋 DTOs (Data Transfer Objects)
+
+Este microservicio utiliza DTOs para estructurar la transferencia de datos entre el cliente y el servidor, aplicando validaciones en la capa de API y desacoplando la representación externa de los modelos de dominio internos.
+
+### Patrones y Convenciones
+
+#### Tipos de DTOs
+
+El servicio utiliza tres categorías principales de DTOs:
+
+1. **Request DTOs** (Entrada)
+   - Contienen validaciones de entrada usando Jakarta Validation
+   - Se utilizan en operaciones POST, PUT, PATCH
+   - Ejemplo: `FormatoAData`, `AnteproyectoData`, `EvaluacionRequest`
+
+2. **Response DTOs** (Salida)
+   - Representan datos de salida sin validaciones
+   - Se utilizan en operaciones GET
+   - Ejemplo: `FormatoAView`, `AnteproyectoView`, `IdResponse`
+
+3. **Container DTOs** (Contenedores)
+   - Envuelven colecciones de datos para paginación
+   - Ejemplo: `FormatoAPage`, `AnteproyectoPage`
+
+#### Validaciones Aplicadas
+
+Todos los DTOs de entrada utilizan anotaciones de Jakarta Validation para garantizar la integridad de datos:
+
+| Anotación | Propósito | Ejemplo de uso |
+|-----------|-----------|----------------|
+| `@NotNull` | Campo obligatorio (no puede ser null) | `@NotNull private Integer directorId;` |
+| `@NotBlank` | String obligatorio y no vacío | `@NotBlank private String titulo;` |
+| `@NotEmpty` | Colección obligatoria con al menos un elemento | `@NotEmpty private List<String> objetivos;` |
+| `@Size` | Limita longitud de strings o tamaño de colecciones | `@Size(max=300) private String titulo;` |
+| `@Pattern` | Valida formato usando expresión regular | `@Pattern(regexp="APROBADO\|RECHAZADO")` |
+| `@Valid` | Valida objetos anidados recursivamente | `@Valid @RequestBody FormatoAData data` |
+
+### DTOs de Request (Entrada)
+
+#### FormatoAData
+
+**Propósito:** Datos JSON para crear el Formato A inicial (RF2).
+
+**Uso:** `POST /api/submissions/formatoA` (multipart/form-data - parte `data`)
+
+**Estructura:**
+
+```json
+{
+  "titulo": "Sistema de Gestión de Inventarios con IoT",
+  "modalidad": "INVESTIGACION",
+  "objetivoGeneral": "Desarrollar un sistema de gestión de inventarios utilizando tecnologías IoT",
+  "objetivosEspecificos": [
+    "Diseñar la arquitectura del sistema IoT",
+    "Implementar sensores de detección de stock",
+    "Desarrollar dashboard de monitoreo en tiempo real"
+  ],
+  "directorId": 101,
+  "codirectorId": 205,
+  "estudiante1Id": 1001,
+  "estudiante2Id": 1002
+}
+```
+
+**Validaciones:**
+
+| Campo | Validación | Descripción |
+|-------|------------|-------------|
+| `titulo` | `@NotBlank`, `@Size(max=300)` | Título del trabajo, obligatorio, máximo 300 caracteres |
+| `modalidad` | `@NotNull` | INVESTIGACION o PRACTICA_PROFESIONAL, obligatorio |
+| `objetivoGeneral` | `@NotBlank`, `@Size(max=1000)` | Objetivo general, obligatorio, máximo 1000 caracteres |
+| `objetivosEspecificos` | `@NotEmpty`, cada elemento `@NotBlank` | Lista de objetivos, al menos 1 requerido |
+| `directorId` | `@NotNull` | ID del director, obligatorio |
+| `codirectorId` | Opcional | ID del codirector, puede ser null |
+| `estudiante1Id` | `@NotNull` | ID del estudiante principal, obligatorio |
+| `estudiante2Id` | Opcional | ID del segundo estudiante (solo INVESTIGACION) |
+
+**Reglas de Negocio:**
+
+- Si `modalidad = PRACTICA_PROFESIONAL`: requiere archivo `carta` en el multipart
+- Si `modalidad = INVESTIGACION`: permite hasta 2 estudiantes
+- El archivo `pdf` es siempre obligatorio en el multipart
+
+---
+
+#### AnteproyectoData
+
+**Propósito:** Datos JSON para subir el anteproyecto (RF6).
+
+**Uso:** `POST /api/submissions/anteproyecto` (multipart/form-data - parte `data`)
+
+**Estructura:**
+
+```json
+{
+  "proyectoId": 1
+}
+```
+
+**Validaciones:**
+
+| Campo | Validación | Descripción |
+|-------|------------|-------------|
+| `proyectoId` | `@NotNull` | ID del proyecto asociado, obligatorio |
+
+**Pre-condiciones Validadas en el Servicio:**
+
+- El proyecto debe existir
+- El usuario debe ser el director del proyecto
+- El Formato A del proyecto debe estar APROBADO
+- No debe existir un anteproyecto previo
+
+---
+
+#### EvaluacionRequest
+
+**Propósito:** Cambiar estado de una versión de Formato A (APROBADO/RECHAZADO).
+
+**Uso:** `PATCH /api/submissions/formatoA/{versionId}/estado` (solo Review Service)
+
+**Estructura:**
+
+```json
+{
+  "estado": "APROBADO",
+  "observaciones": "Cumple con todos los requisitos metodológicos",
+  "evaluadoPor": 5
+}
+```
+
+**Validaciones:**
+
+| Campo | Validación | Descripción |
+|-------|------------|-------------|
+| `estado` | `@NotNull`, `@Pattern(regexp="APROBADO\|RECHAZADO")` | Estado de evaluación, solo APROBADO o RECHAZADO |
+| `observaciones` | `@Size(max=2000)` | Comentarios del evaluador, opcional, máximo 2000 caracteres |
+| `evaluadoPor` | `@NotNull` | ID del coordinador que evalúa, obligatorio |
+
+**Seguridad:** Requiere header `X-Service: review` para invocación interna.
+
+---
+
+#### CambioEstadoAnteproyectoRequest
+
+**Propósito:** Cambiar estado de un anteproyecto.
+
+**Uso:** `PATCH /api/submissions/anteproyecto/{id}/estado` (solo Review Service)
+
+**Estructura:**
+
+```json
+{
+  "estado": "APROBADO",
+  "observaciones": "Anteproyecto bien estructurado con metodología clara"
+}
+```
+
+**Validaciones:**
+
+| Campo | Validación | Descripción |
+|-------|------------|-------------|
+| `estado` | `@NotBlank` | Estado del anteproyecto, obligatorio |
+| `observaciones` | `@Size(max=2000)` | Observaciones sobre la evaluación, opcional |
+
+**Seguridad:** Requiere header `X-Service: review`.
+
+---
+
+#### CreateSubmissionDTO
+
+**Propósito:** Crear un nuevo proyecto submission (endpoint legacy).
+
+**Uso:** `POST /api/submissions` (alternativa al flujo de Formato A)
+
+**Estructura:**
+
+```json
+{
+  "titulo": "Sistema de IA para análisis educativo",
+  "descripcion": "Desarrollo de un sistema de inteligencia artificial para análisis de datos educativos",
+  "modalidad": "INVESTIGACION",
+  "docenteDirectorId": 101,
+  "docenteCodirectorId": 102,
+  "estudianteId": 1001,
+  "objetivoGeneral": "Desarrollar un sistema de IA para mejorar el análisis de datos educativos",
+  "objetivosEspecificos": "1. Diseñar arquitectura\n2. Implementar modelos\n3. Validar resultados",
+  "rutaFormatoA": "/uploads/formato-a.pdf",
+  "rutaCarta": "/uploads/carta.pdf"
+}
+```
+
+**Validaciones:**
+
+| Campo | Validación | Descripción |
+|-------|------------|-------------|
+| `titulo` | `@NotBlank`, `@Size(max=300)` | Título del proyecto, obligatorio |
+| `descripcion` | `@Size(max=1000)` | Descripción general, opcional |
+| `modalidad` | `@NotNull` | Modalidad del trabajo, obligatorio |
+| `docenteDirectorId` | `@NotNull` | ID del director, obligatorio |
+| `objetivoGeneral` | `@Size(max=1000)` | Objetivo general, opcional |
+| `objetivosEspecificos` | `@Size(max=2000)` | Objetivos específicos, opcional |
+
+---
+
+#### EvaluacionDTO
+
+**Propósito:** Evaluación simplificada del coordinador (RF-3).
+
+**Uso:** `PUT /api/submissions/{id}/evaluar`
+
+**Estructura:**
+
+```json
+{
+  "aprobado": true,
+  "comentarios": "El proyecto cumple con todos los requisitos"
+}
+```
+
+**Validaciones:**
+
+| Campo | Validación | Descripción |
+|-------|------------|-------------|
+| `aprobado` | `@NotNull` | true=aprobar, false=rechazar, obligatorio |
+| `comentarios` | `@Size(max=2000)` | Comentarios del evaluador, opcional |
+
+---
+
+### DTOs de Response (Salida)
+
+#### FormatoAView
+
+**Propósito:** Vista completa de una versión de Formato A.
+
+**Uso:** `GET /api/submissions/formatoA/{id}`, contenido de `FormatoAPage`
+
+**Estructura:**
+
+```json
+{
+  "id": 1,
+  "proyectoId": 1,
+  "titulo": "Sistema de Gestión de Inventarios con IoT",
+  "version": 1,
+  "estado": "PENDIENTE",
+  "observaciones": null,
+  "nombreArchivo": "formato_a_v1.pdf",
+  "pdfUrl": "/app/uploads/formato-a/1/v1/documento.pdf",
+  "cartaUrl": "/app/uploads/formato-a/1/v1/carta.pdf",
+  "fechaEnvio": "2025-11-03T10:30:00",
+  "docenteDirectorNombre": "Dr. Juan Pérez",
+  "docenteDirectorEmail": "juan.perez@unicauca.edu.co",
+  "estudiantesEmails": ["estudiante1@unicauca.edu.co", "estudiante2@unicauca.edu.co"]
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | Long | Identificador único de la versión |
+| `proyectoId` | Long | ID del proyecto asociado |
+| `titulo` | String | Título del trabajo de grado |
+| `version` | Integer | Número de versión (1, 2, o 3) |
+| `estado` | enumEstadoFormato | PENDIENTE, APROBADO, RECHAZADO |
+| `observaciones` | String | Comentarios del evaluador (null si no evaluado) |
+| `nombreArchivo` | String | Nombre del archivo PDF |
+| `pdfUrl` | String | Ruta del PDF del Formato A |
+| `cartaUrl` | String | Ruta de la carta (null si no aplica) |
+| `fechaEnvio` | LocalDateTime | Fecha y hora de envío |
+| `docenteDirectorNombre` | String | Nombre completo del director |
+| `docenteDirectorEmail` | String | Email del director |
+| `estudiantesEmails` | List<String> | Lista de emails de estudiantes |
+
+---
+
+#### AnteproyectoView
+
+**Propósito:** Vista de un anteproyecto con datos básicos.
+
+**Uso:** `GET /api/submissions/anteproyecto`, contenido de `AnteproyectoPage`
+
+**Estructura:**
+
+```json
+{
+  "id": 1,
+  "proyectoId": 1,
+  "pdfUrl": "/app/uploads/anteproyectos/1/documento.pdf",
+  "fechaEnvio": "2025-11-03T15:45:00",
+  "estado": "EN_EVALUACION"
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | Long | Identificador único del anteproyecto |
+| `proyectoId` | Long | ID del proyecto asociado |
+| `pdfUrl` | String | Ruta del PDF del anteproyecto |
+| `fechaEnvio` | LocalDateTime | Fecha y hora de envío |
+| `estado` | String | Estado actual (PENDIENTE, EN_EVALUACION, APROBADO, RECHAZADO) |
+
+---
+
+#### SubmissionResponseDTO
+
+**Propósito:** Información completa de un proyecto submission.
+
+**Uso:** `GET /api/submissions/{id}`, `GET /api/submissions`
+
+**Estructura:**
+
+```json
+{
+  "id": 1,
+  "titulo": "Sistema de Gestión de Inventarios con IoT",
+  "descripcion": "Desarrollo de un sistema IoT para gestión automatizada de inventarios",
+  "modalidad": "INVESTIGACION",
+  "fechaCreacion": "2025-11-01T10:00:00",
+  "fechaUltimaModificacion": "2025-11-03T15:30:00",
+  "docenteDirectorId": 101,
+  "docenteCodirectorId": 102,
+  "estudianteId": 1001,
+  "objetivoGeneral": "Desarrollar un sistema de gestión de inventarios con IoT",
+  "objetivosEspecificos": "1. Diseñar arquitectura\n2. Implementar sensores\n3. Desarrollar dashboard",
+  "estadoActual": "EN_EVALUACION_COORDINADOR",
+  "numeroIntentos": 1,
+  "comentariosComite": null,
+  "esEstadoFinal": false,
+  "rutaFormatoA": "/uploads/formato-a.pdf",
+  "rutaCarta": "/uploads/carta.pdf"
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | Long | Identificador único del proyecto |
+| `titulo` | String | Título del trabajo de grado |
+| `descripcion` | String | Descripción general |
+| `modalidad` | enumModalidad | INVESTIGACION o PRACTICA_PROFESIONAL |
+| `fechaCreacion` | LocalDateTime | Fecha de creación |
+| `fechaUltimaModificacion` | LocalDateTime | Última modificación |
+| `docenteDirectorId` | Long | ID del director |
+| `docenteCodirectorId` | Long | ID del codirector (opcional) |
+| `estudianteId` | Long | ID del estudiante |
+| `objetivoGeneral` | String | Objetivo general |
+| `objetivosEspecificos` | String | Objetivos específicos |
+| `estadoActual` | String | Estado actual del proyecto |
+| `numeroIntentos` | Integer | Número de intentos de Formato A (0-3) |
+| `comentariosComite` | String | Comentarios del comité |
+| `esEstadoFinal` | boolean | true si es un estado terminal |
+| `rutaFormatoA` | String | Ruta del Formato A |
+| `rutaCarta` | String | Ruta de la carta |
+
+---
+
+#### IdResponse
+
+**Propósito:** Respuesta simple con ID del recurso creado.
+
+**Uso:** Respuesta de operaciones POST exitosas
+
+**Estructura:**
+
+```json
+{
+  "id": 1
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | Long | ID del recurso creado |
+
+---
+
+### DTOs Contenedores (Paginación)
+
+#### FormatoAPage
+
+**Propósito:** Respuesta paginada de versiones de Formato A.
+
+**Uso:** `GET /api/submissions/formatoA`
+
+**Estructura:**
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "proyectoId": 1,
+      "titulo": "Sistema de IoT...",
+      "version": 1,
+      "estado": "PENDIENTE",
+      ...
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 100
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `content` | List<FormatoAView> | Lista de elementos en la página actual |
+| `page` | int | Número de página actual (inicia en 0) |
+| `size` | int | Tamaño de la página |
+| `totalElements` | long | Total de elementos en todas las páginas |
+
+---
+
+#### AnteproyectoPage
+
+**Propósito:** Respuesta paginada de anteproyectos.
+
+**Uso:** `GET /api/submissions/anteproyecto`
+
+**Estructura:**
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "proyectoId": 1,
+      "pdfUrl": "/app/uploads/anteproyectos/1/documento.pdf",
+      "fechaEnvio": "2025-11-03T15:45:00",
+      "estado": "EN_EVALUACION"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 50
+}
+```
+
+**Campos:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `content` | List<AnteproyectoView> | Lista de anteproyectos en la página actual |
+| `page` | int | Número de página actual (inicia en 0) |
+| `size` | int | Tamaño de la página |
+| `totalElements` | long | Total de anteproyectos |
+
+---
+
+### Mejores Prácticas para Uso de DTOs
+
+#### 1. Validación en el Cliente
+
+Antes de enviar una petición, valide los datos en el cliente para mejorar la experiencia de usuario:
+
+```javascript
+// Ejemplo en JavaScript
+function validarFormatoA(data) {
+  if (!data.titulo || data.titulo.length > 300) {
+    throw new Error("Título inválido");
+  }
+  if (!data.modalidad || !["INVESTIGACION", "PRACTICA_PROFESIONAL"].includes(data.modalidad)) {
+    throw new Error("Modalidad inválida");
+  }
+  if (!data.objetivosEspecificos || data.objetivosEspecificos.length === 0) {
+    throw new Error("Debe proporcionar al menos un objetivo específico");
+  }
+  // ... más validaciones
+}
+```
+
+#### 2. Manejo de Errores de Validación
+
+El servidor retorna errores de validación con código 400 y estructura:
+
+```json
+{
+  "error": "Bad Request",
+  "message": "El título es obligatorio",
+  "timestamp": "2025-11-03T10:30:00",
+  "path": "/api/submissions/formatoA"
+}
+```
+
+#### 3. Multipart Form Data
+
+Para endpoints que requieren archivos:
+
+```bash
+curl -X POST http://localhost:8082/api/submissions/formatoA \
+  -H "X-User-Role: DOCENTE" \
+  -H "X-User-Id: 101" \
+  -F 'data={"titulo":"Mi Proyecto","modalidad":"INVESTIGACION",...};type=application/json' \
+  -F "pdf=@formato_a.pdf;type=application/pdf" \
+  -F "carta=@carta.pdf;type=application/pdf"
+```
+
+#### 4. Paginación
+
+Para listar recursos con paginación:
+
+```bash
+# Primera página (0-19)
+GET /api/submissions/formatoA?page=0&size=20
+
+# Segunda página (20-39)
+GET /api/submissions/formatoA?page=1&size=20
+
+# Con filtro por docente
+GET /api/submissions/formatoA?docenteId=101&page=0&size=10
+```
+
+#### 5. OpenAPI/Swagger
+
+Todos los DTOs están documentados con anotaciones `@Schema` de OpenAPI. 
+Accede a la documentación interactiva en:
+
+```
+http://localhost:8082/swagger-ui.html
+```
+
+---
+
 ## 🐰 Eventos RabbitMQ
 
 ### Eventos Publicados por Submission Service
