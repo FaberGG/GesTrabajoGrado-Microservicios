@@ -16,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 
@@ -38,38 +40,62 @@ public class FormatoAController {
     private final ICrearFormatoAUseCase crearUseCase;
     private final IReenviarFormatoAUseCase reenviarUseCase;
     private final IEvaluarFormatoAUseCase evaluarUseCase;
+    private final ObjectMapper objectMapper;
 
     public FormatoAController(
             ICrearFormatoAUseCase crearUseCase,
             IReenviarFormatoAUseCase reenviarUseCase,
-            IEvaluarFormatoAUseCase evaluarUseCase
+            IEvaluarFormatoAUseCase evaluarUseCase,
+            ObjectMapper objectMapper
     ) {
         this.crearUseCase = crearUseCase;
         this.reenviarUseCase = reenviarUseCase;
         this.evaluarUseCase = evaluarUseCase;
+        this.objectMapper = objectMapper;
     }
 
     /**
      * RF2: Crear Formato A
      * POST /api/v2/submissions/formatoA
      */
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Crear Formato A", description = "RF2: El docente crea un nuevo proyecto con Formato A")
     public ResponseEntity<ProyectoResponse> crear(
             @RequestHeader("X-User-Id") Long userId,
-            @RequestPart("data") @Valid CrearFormatoARequest request,
+            @RequestPart(value = "data") String dataJson,
             @RequestPart("pdf") MultipartFile pdf,
             @RequestPart(value = "carta", required = false) MultipartFile carta
     ) {
         try {
-            log.info("POST /api/v2/submissions/formatoA - Usuario: {}, Título: {}",
-                    userId, request.getTitulo());
+            log.info("POST /api/submissions/formatoA - Usuario: {}", userId);
+            log.debug("Data JSON recibido: {}", dataJson);
+            log.debug("PDF recibido - Nombre: {}, Tamaño: {}, ContentType: {}",
+                     pdf.getOriginalFilename(), pdf.getSize(), pdf.getContentType());
+
+            // Parsear el JSON a objeto CrearFormatoARequest
+            CrearFormatoARequest request = objectMapper.readValue(dataJson, CrearFormatoARequest.class);
+
+            log.info("Título del proyecto: {}", request.getTitulo());
+
+            // Validar que el archivo no esté vacío
+            if (pdf.isEmpty()) {
+                log.error("El archivo PDF está vacío");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
+            // Validar tamaño del archivo (máximo 10MB)
+            if (pdf.getSize() > 10 * 1024 * 1024) {
+                log.error("El archivo PDF excede el tamaño máximo permitido (10MB)");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
 
             // Setear streams de archivos en el request
             request.setPdfStream(pdf.getInputStream());
             request.setPdfNombreArchivo(pdf.getOriginalFilename());
 
-            if (carta != null) {
+            if (carta != null && !carta.isEmpty()) {
+                log.debug("Carta recibida - Nombre: {}, Tamaño: {}",
+                         carta.getOriginalFilename(), carta.getSize());
                 request.setCartaStream(carta.getInputStream());
                 request.setCartaNombreArchivo(carta.getOriginalFilename());
             }
@@ -82,7 +108,10 @@ public class FormatoAController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IOException e) {
-            log.error("Error al procesar archivos: {}", e.getMessage(), e);
+            log.error("Error al procesar archivos o JSON: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (IllegalArgumentException e) {
+            log.error("Error de validación: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         } catch (Exception e) {
             log.error("Error al crear Formato A: {}", e.getMessage(), e);
