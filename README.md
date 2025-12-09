@@ -465,6 +465,7 @@ Este documento centraliza:
   - Gestión de Formato A
   - Gestión de Anteproyectos
   - Carga de documentos
+  - **DTOs documentados**: Todos los DTOs incluyen validaciones Jakarta Validation y documentación OpenAPI
 
 - **Review Service**: Ver `review-service/README.md`
   - Evaluación de Formato A
