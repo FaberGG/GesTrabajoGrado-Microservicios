@@ -42,17 +42,20 @@ public class ReenviarFormatoAUseCase implements IReenviarFormatoAUseCase {
     private final IFileStoragePort fileStoragePort;
     private final IEventPublisherPort eventPublisherPort;
     private final INotificationPort notificationPort;
-    
+    private final co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher;
+
     public ReenviarFormatoAUseCase(
             IProyectoRepositoryPort repositoryPort,
             IFileStoragePort fileStoragePort,
             IEventPublisherPort eventPublisherPort,
-            INotificationPort notificationPort
+            INotificationPort notificationPort,
+            co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher
     ) {
         this.repositoryPort = repositoryPort;
         this.fileStoragePort = fileStoragePort;
         this.eventPublisherPort = eventPublisherPort;
         this.notificationPort = notificationPort;
+        this.eventEnricher = eventEnricher;
     }
     
     @Override
@@ -126,13 +129,19 @@ public class ReenviarFormatoAUseCase implements IReenviarFormatoAUseCase {
         
         // 6. Persistir cambios
         Proyecto proyectoActualizado = repositoryPort.save(proyecto);
-        
-        // 7. Publicar eventos de dominio
-        List<DomainEvent> eventos = proyectoActualizado.obtenerEventosPendientes();
-        if (!eventos.isEmpty()) {
-            eventPublisherPort.publishAll(eventos);
+
+        // 7. Publicar evento enriquecido para progress-tracking
+        try {
+            // Limpiar eventos básicos del aggregate
             proyectoActualizado.limpiarEventos();
-            log.debug("Publicados {} eventos de dominio", eventos.size());
+
+            // Crear y publicar evento enriquecido
+            var eventoEnriquecido = eventEnricher.enrichFormatoAReenviado(proyectoActualizado);
+            eventPublisherPort.publish(eventoEnriquecido);
+
+            log.info("✅ Evento enriquecido FormatoAReenviado publicado para proyecto {}", proyectoActualizado.getId());
+        } catch (Exception e) {
+            log.error("⚠️ Error publicando evento enriquecido (no afecta la transacción): {}", e.getMessage());
         }
         
         // 8. Enviar notificación al coordinador (RF4)

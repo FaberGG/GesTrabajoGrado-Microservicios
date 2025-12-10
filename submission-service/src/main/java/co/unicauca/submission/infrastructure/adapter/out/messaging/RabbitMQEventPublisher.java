@@ -2,6 +2,7 @@ package co.unicauca.submission.infrastructure.adapter.out.messaging;
 
 import co.unicauca.submission.application.port.out.IEventPublisherPort;
 import co.unicauca.submission.domain.event.DomainEvent;
+import co.unicauca.submission.infrastructure.config.RabbitMQConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -18,8 +19,6 @@ public class RabbitMQEventPublisher implements IEventPublisherPort {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMQEventPublisher.class);
 
-    private static final String EXCHANGE = "progress.exchange";
-
     private final RabbitTemplate rabbitTemplate;
 
     public RabbitMQEventPublisher(RabbitTemplate rabbitTemplate) {
@@ -29,17 +28,18 @@ public class RabbitMQEventPublisher implements IEventPublisherPort {
     @Override
     public void publish(DomainEvent event) {
         try {
+            String exchange = determinarExchange(event);
             String routingKey = determinarRoutingKey(event);
 
-            log.debug("Publicando evento: {} con routing key: {}",
-                     event.getEventType(), routingKey);
+            log.info("📤 Publicando evento: {} → Exchange: {}, Routing Key: {}",
+                     event.getEventType(), exchange, routingKey);
 
-            rabbitTemplate.convertAndSend(EXCHANGE, routingKey, event);
+            rabbitTemplate.convertAndSend(exchange, routingKey, event);
 
-            log.info("Evento publicado exitosamente: {}", event.getEventType());
+            log.info("✅ Evento publicado exitosamente: {} → {}", event.getEventType(), routingKey);
 
         } catch (Exception e) {
-            log.error("Error al publicar evento {}: {}", event.getEventType(), e.getMessage(), e);
+            log.error("❌ Error al publicar evento {}: {}", event.getEventType(), e.getMessage(), e);
             // No lanzamos excepción para no afectar la transacción principal
         }
     }
@@ -57,19 +57,40 @@ public class RabbitMQEventPublisher implements IEventPublisherPort {
     }
 
     /**
+     * Determina el exchange según el tipo de evento.
+     */
+    private String determinarExchange(DomainEvent event) {
+        String eventType = event.getEventType();
+
+        return switch (eventType) {
+            case "FormatoACreado", "FormatoAReenviado", "FormatoAEvaluado" ->
+                RabbitMQConfig.FORMATO_A_EXCHANGE;
+            case "AnteproyectoSubido", "EvaluadoresAsignados", "AnteproyectoEvaluado" ->
+                RabbitMQConfig.ANTEPROYECTO_EXCHANGE;
+            default -> {
+                log.warn("Tipo de evento desconocido: {}, usando exchange por defecto", eventType);
+                yield RabbitMQConfig.FORMATO_A_EXCHANGE;
+            }
+        };
+    }
+
+    /**
      * Determina el routing key según el tipo de evento.
      */
     private String determinarRoutingKey(DomainEvent event) {
         String eventType = event.getEventType();
 
         return switch (eventType) {
-            case "FormatoACreado" -> "progress.formatoA.creado";
-            case "FormatoAEvaluado" -> "progress.formatoA.evaluado";
-            case "FormatoAReenviado" -> "progress.formatoA.reenviado";
-            case "AnteproyectoSubido" -> "progress.anteproyecto.subido";
-            case "EvaluadoresAsignados" -> "progress.anteproyecto.evaluadores.asignados";
-            case "AnteproyectoEvaluado" -> "progress.anteproyecto.evaluado";
-            default -> "progress.unknown";
+            case "FormatoACreado" -> RabbitMQConfig.FORMATO_A_ENVIADO_KEY;
+            case "FormatoAReenviado" -> RabbitMQConfig.FORMATO_A_REENVIADO_KEY;
+            case "AnteproyectoSubido" -> RabbitMQConfig.ANTEPROYECTO_ENVIADO_KEY;
+            case "FormatoAEvaluado" -> "formatoa.evaluado";  // Para review-service
+            case "EvaluadoresAsignados" -> "evaluadores.asignados";  // Para review-service
+            case "AnteproyectoEvaluado" -> "anteproyecto.evaluado";  // Para review-service
+            default -> {
+                log.warn("Tipo de evento desconocido: {}", eventType);
+                yield "unknown";
+            }
         };
     }
 }

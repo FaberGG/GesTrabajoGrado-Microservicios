@@ -36,21 +36,24 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
     private final IProyectoRepositoryPort repositoryPort;
     private final IFileStoragePort fileStoragePort;
     private final IEventPublisherPort eventPublisherPort;
-    private final INotificationPort notificationPort;
     private final IIdentityServicePort identityServicePort;
+    private final INotificationPort notificationPort;
+    private final co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher;
 
     public CrearFormatoAUseCase(
             IProyectoRepositoryPort repositoryPort,
             IFileStoragePort fileStoragePort,
             IEventPublisherPort eventPublisherPort,
+            IIdentityServicePort identityServicePort,
             INotificationPort notificationPort,
-            IIdentityServicePort identityServicePort
+            co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher
     ) {
         this.repositoryPort = repositoryPort;
         this.fileStoragePort = fileStoragePort;
         this.eventPublisherPort = eventPublisherPort;
-        this.notificationPort = notificationPort;
         this.identityServicePort = identityServicePort;
+        this.notificationPort = notificationPort;
+        this.eventEnricher = eventEnricher;
     }
 
     @Override
@@ -146,12 +149,19 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
 
         log.info("Proyecto guardado con ID: {}", proyectoGuardado.getId().getValue());
 
-        // 7. Publicar eventos de dominio
-        List<DomainEvent> eventos = proyectoGuardado.obtenerEventosPendientes();
-        if (!eventos.isEmpty()) {
-            eventPublisherPort.publishAll(eventos);
+        // 7. Publicar evento enriquecido para progress-tracking
+        try {
+            // Limpiar eventos básicos del aggregate (no los publicamos)
             proyectoGuardado.limpiarEventos();
-            log.debug("Publicados {} eventos de dominio", eventos.size());
+
+            // Crear y publicar evento enriquecido con información completa
+            var eventoEnriquecido = eventEnricher.enrichFormatoACreado(proyectoGuardado);
+            eventPublisherPort.publish(eventoEnriquecido);
+
+            log.info("✅ Evento enriquecido FormatoACreado publicado para proyecto {}", proyectoGuardado.getId());
+        } catch (Exception e) {
+            log.error("⚠️ Error publicando evento enriquecido (no afecta la transacción): {}", e.getMessage());
+            // No propagamos la excepción para no afectar la creación del proyecto
         }
 
         // 8. Enviar notificación al coordinador (RF2)
