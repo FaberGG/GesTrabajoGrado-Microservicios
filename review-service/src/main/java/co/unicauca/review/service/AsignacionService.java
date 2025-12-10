@@ -11,6 +11,7 @@ import co.unicauca.review.repository.AsignacionEvaluadoresRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class AsignacionService {
@@ -72,7 +74,28 @@ public class AsignacionService {
         // Si se solicitan asignaciones PENDIENTES, obtener anteproyectos pendientes desde submission
         if (estado == AsignacionEstado.PENDIENTE) {
             log.info("Obteniendo anteproyectos pendientes desde submission-service");
-            return submissionClient.getAnteproyectosPendientes(page, size);
+            Page<AsignacionDTO> anteproyectosPendientes = submissionClient.getAnteproyectosPendientes(page, size);
+
+            // Filtrar los que ya tienen asignación en la BD local
+            List<AsignacionDTO> filtrados = anteproyectosPendientes.getContent().stream()
+                .filter(dto -> {
+                    boolean existeAsignacion = asignacionRepository.existsByAnteproyectoId(dto.anteproyectoId());
+                    if (existeAsignacion) {
+                        log.debug("Anteproyecto {} ya tiene asignación, se excluye de pendientes", dto.anteproyectoId());
+                    }
+                    return !existeAsignacion; // Mantener solo los que NO tienen asignación
+                })
+                .toList();
+
+            log.info("Se filtraron {} anteproyectos pendientes de {} totales (excluyendo los que ya tienen asignación)",
+                    filtrados.size(), anteproyectosPendientes.getContent().size());
+
+            // Crear nueva página con los filtrados
+            return new org.springframework.data.domain.PageImpl<>(
+                filtrados,
+                anteproyectosPendientes.getPageable(),
+                filtrados.size() // Total ajustado después del filtro
+            );
         }
 
         // Para otros estados, consultar BD local (asignaciones ya creadas)

@@ -193,10 +193,37 @@ public class ProyectoMapper {
 
     /**
      * Restaura el anteproyecto del proyecto desde la entidad.
+     * Usa reflection para setear el campo privado 'anteproyecto' directamente.
      */
     private void restaurarAnteproyecto(Proyecto proyecto, ProyectoEntity entity, ArchivoAdjunto pdf) {
-        // Similar a restaurarEstado, esto es una simplificación para reconstrucción desde BD
-        // En producción, consideraríamos usar eventos para reconstruir el estado
+        try {
+            // Crear AnteproyectoInfo con el PDF
+            AnteproyectoInfo anteproyecto = new AnteproyectoInfo(pdf);
+
+            // Restaurar evaluadores si existen
+            if (entity.getEvaluador1Id() != null && entity.getEvaluador2Id() != null) {
+                // Usar reflection para setear evaluadores en AnteproyectoInfo
+                java.lang.reflect.Field evaluador1Field = AnteproyectoInfo.class.getDeclaredField("evaluador1Id");
+                evaluador1Field.setAccessible(true);
+                evaluador1Field.set(anteproyecto, entity.getEvaluador1Id());
+
+                java.lang.reflect.Field evaluador2Field = AnteproyectoInfo.class.getDeclaredField("evaluador2Id");
+                evaluador2Field.setAccessible(true);
+                evaluador2Field.set(anteproyecto, entity.getEvaluador2Id());
+            }
+
+            // Usar reflection para setear el campo 'anteproyecto' en Proyecto
+            java.lang.reflect.Field anteproyectoField = Proyecto.class.getDeclaredField("anteproyecto");
+            anteproyectoField.setAccessible(true);
+            anteproyectoField.set(proyecto, anteproyecto);
+
+            System.out.println("✅ Anteproyecto restaurado correctamente para proyecto " + entity.getId());
+
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            System.err.println("⚠️ ADVERTENCIA: No se pudo restaurar anteproyecto para proyecto " + entity.getId() +
+                             ". El anteproyecto quedará null. Error: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
 
