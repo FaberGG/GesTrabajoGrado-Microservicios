@@ -82,16 +82,22 @@ public class SubirAnteproyectoUseCase implements ISubirAnteproyectoUseCase {
         }
 
         String directorioBase = "proyectos/anteproyecto/" + proyectoId;
+
+        // Validar y preparar nombre del PDF
+        String nombrePdf = (request.getPdfNombreArchivo() != null && !request.getPdfNombreArchivo().trim().isEmpty()) ?
+                          request.getPdfNombreArchivo() : "anteproyecto.pdf";
+
         String rutaPdf = fileStoragePort.guardarArchivo(
             request.getPdfStream(),
-            request.getPdfNombreArchivo() != null ? request.getPdfNombreArchivo() : "anteproyecto.pdf",
+            nombrePdf,
             directorioBase
         );
 
-        log.debug("PDF del anteproyecto guardado en: {}", rutaPdf);
+        log.debug("PDF del anteproyecto guardado en: {} con nombre: {}", rutaPdf, nombrePdf);
 
         // 5. Crear Value Object y subir anteproyecto en el aggregate
-        ArchivoAdjunto pdfAnteproyecto = ArchivoAdjunto.pdf(rutaPdf, request.getPdfNombreArchivo());
+        // Usar el nombre validado que no es null/empty
+        ArchivoAdjunto pdfAnteproyecto = ArchivoAdjunto.pdf(rutaPdf, nombrePdf);
         proyecto.subirAnteproyecto(pdfAnteproyecto, userId);
 
         log.debug("Anteproyecto subido. Estado: {}", proyecto.getEstado());

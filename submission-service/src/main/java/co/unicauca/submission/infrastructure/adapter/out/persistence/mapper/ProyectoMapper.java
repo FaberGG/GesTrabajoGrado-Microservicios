@@ -136,25 +136,58 @@ public class ProyectoMapper {
     /**
      * Restaura el estado del proyecto desde la entidad.
      * Método privado de utilidad para reconstrucción desde BD.
+     *
+     * IMPORTANTE: Este método usa reflection para setear el estado directamente
+     * porque al reconstruir desde BD, no podemos reproducir todas las transiciones.
+     * En producción, consideraríamos Event Sourcing para reconstruir el estado completo.
      */
     private void restaurarEstado(Proyecto proyecto, ProyectoEntity entity) {
-        // Usar reflection o método especial en el aggregate para setear estado
-        // Por ahora, usaremos las transiciones del dominio para llegar al estado correcto
-
         EstadoProyecto estadoObjetivo = entity.getEstado();
+        EstadoProyecto estadoActual = proyecto.getEstado();
 
-        // Si el estado guardado es diferente al inicial, aplicar transición
-        if (!proyecto.getEstado().equals(estadoObjetivo)) {
-            // Presentar al coordinador si está en evaluación o posterior
-            if (estadoObjetivo != EstadoProyecto.FORMATO_A_DILIGENCIADO) {
-                if (proyecto.getEstado() == EstadoProyecto.FORMATO_A_DILIGENCIADO) {
-                    proyecto.presentarAlCoordinador();
+        // Si el estado guardado es diferente al inicial, necesitamos restaurarlo
+        if (!estadoActual.equals(estadoObjetivo)) {
+            try {
+                // Usar reflection para acceder al campo privado 'estado'
+                java.lang.reflect.Field estadoField = Proyecto.class.getDeclaredField("estado");
+                estadoField.setAccessible(true);
+                estadoField.set(proyecto, estadoObjetivo);
+
+                // También restaurar el número de intentos si es necesario
+                if (entity.getNumeroIntento() > 1) {
+                    FormatoAInfo formatoA = proyecto.getFormatoA();
+                    java.lang.reflect.Field intentoField = FormatoAInfo.class.getDeclaredField("numeroIntento");
+                    intentoField.setAccessible(true);
+                    intentoField.set(formatoA, entity.getNumeroIntento());
                 }
-            }
 
-            // Aplicar otras transiciones según el estado guardado
-            // NOTA: En un sistema real, guardaríamos también el historial de transiciones
-            // Por ahora, simplificamos asumiendo que el estado guardado es correcto
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                // Si falla reflection, intentar transiciones normales
+                // Esto es un fallback por si la estructura del dominio cambia
+                restaurarEstadoConTransiciones(proyecto, estadoObjetivo);
+            }
+        }
+    }
+
+    /**
+     * Método de fallback para restaurar estado usando transiciones del dominio.
+     * Solo maneja transiciones simples comunes.
+     */
+    private void restaurarEstadoConTransiciones(Proyecto proyecto, EstadoProyecto estadoObjetivo) {
+        EstadoProyecto estadoActual = proyecto.getEstado();
+
+        // FORMATO_A_DILIGENCIADO → EN_EVALUACION_COORDINADOR
+        if (estadoActual == EstadoProyecto.FORMATO_A_DILIGENCIADO &&
+            estadoObjetivo == EstadoProyecto.EN_EVALUACION_COORDINADOR) {
+            proyecto.presentarAlCoordinador();
+        }
+
+        // Para otros estados, logear advertencia
+        // No podemos reproducir evaluaciones o reenvíos sin datos históricos
+        if (!proyecto.getEstado().equals(estadoObjetivo)) {
+            System.err.println("ADVERTENCIA: No se pudo restaurar estado " + estadoObjetivo +
+                             " desde " + estadoActual + " usando transiciones normales. " +
+                             "El estado puede ser inconsistente.");
         }
     }
 

@@ -7,17 +7,22 @@ import co.unicauca.submission.application.dto.response.ProyectoResponse;
 import co.unicauca.submission.application.port.in.ICrearFormatoAUseCase;
 import co.unicauca.submission.application.port.in.IEvaluarFormatoAUseCase;
 import co.unicauca.submission.application.port.in.IReenviarFormatoAUseCase;
+import co.unicauca.submission.application.port.in.IListarFormatoAPendientesQuery;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.MediaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import co.unicauca.submission.application.port.in.IObtenerProyectoQuery;
 
 import java.io.IOException;
 
@@ -26,9 +31,11 @@ import java.io.IOException;
  * Nueva implementación con arquitectura hexagonal.
  *
  * Endpoints:
- * - POST   /api/v2/submissions/formatoA
- * - POST   /api/v2/submissions/formatoA/{id}/reenviar
- * - PATCH  /api/v2/submissions/formatoA/{id}/evaluar
+ * - GET    /api/submissions/formatoA/{id}
+ * - POST   /api/submissions/formatoA
+ * - POST   /api/submissions/formatoA/{id}/reenviar
+ * - PATCH  /api/submissions/formatoA/{id}/evaluar
+ * - GET    /api/submissions/formatoA/pendientes
  */
 @RestController
 @RequestMapping("/api/submissions/formatoA")
@@ -40,18 +47,60 @@ public class FormatoAController {
     private final ICrearFormatoAUseCase crearUseCase;
     private final IReenviarFormatoAUseCase reenviarUseCase;
     private final IEvaluarFormatoAUseCase evaluarUseCase;
+    private final IListarFormatoAPendientesQuery listarPendientesQuery;
+    private final co.unicauca.submission.application.port.in.IObtenerProyectoQuery obtenerProyectoQuery;
     private final ObjectMapper objectMapper;
 
     public FormatoAController(
             ICrearFormatoAUseCase crearUseCase,
             IReenviarFormatoAUseCase reenviarUseCase,
             IEvaluarFormatoAUseCase evaluarUseCase,
+            @org.springframework.beans.factory.annotation.Qualifier("listarFormatoAPendientesQueryEnriched")
+            IListarFormatoAPendientesQuery listarPendientesQuery,
+            co.unicauca.submission.application.port.in.IObtenerProyectoQuery obtenerProyectoQuery,
             ObjectMapper objectMapper
     ) {
         this.crearUseCase = crearUseCase;
         this.reenviarUseCase = reenviarUseCase;
         this.evaluarUseCase = evaluarUseCase;
+        this.listarPendientesQuery = listarPendientesQuery;
+        this.obtenerProyectoQuery = obtenerProyectoQuery;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Obtener Formato A por ID
+     * GET /api/submissions/formatoA/{id}
+     *
+     * Endpoint de compatibilidad para review-service.
+     * Retorna información del proyecto si es un Formato A.
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "Obtener Formato A por ID", description = "Obtiene información de un Formato A específico")
+    public ResponseEntity<ProyectoResponse> obtenerFormatoA(@PathVariable Long id) {
+        try {
+            log.info("GET /api/submissions/formatoA/{}", id);
+
+            ProyectoResponse response = obtenerProyectoQuery.obtenerPorId(id);
+
+            // Verificar que sea un proyecto de tipo Formato A (no Anteproyecto)
+            if (!response.getEstado().startsWith("FORMATO_A") &&
+                !"EN_EVALUACION_COORDINADOR".equals(response.getEstado()) &&
+                !"CORRECCIONES_SOLICITADAS".equals(response.getEstado())) {
+                log.warn("Proyecto {} no es un Formato A, estado: {}", id, response.getEstado());
+                return ResponseEntity.notFound().build();
+            }
+
+            log.info("Formato A {} obtenido correctamente, estado: {}", id, response.getEstado());
+            return ResponseEntity.ok(response);
+
+        } catch (co.unicauca.submission.domain.exception.ProyectoNotFoundException e) {
+            log.error("Formato A {} no encontrado", id);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("Error al obtener Formato A {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     /**
@@ -188,6 +237,35 @@ public class FormatoAController {
 
         } catch (Exception e) {
             log.error("Error al evaluar Formato A: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * RF3: Listar Formatos A Pendientes
+     * GET /api/submissions/formatoA/pendientes
+     */
+    @GetMapping("/pendientes")
+    @Operation(summary = "Listar Formatos A pendientes", description = "RF3: El coordinador lista los Formatos A pendientes de evaluación")
+    public ResponseEntity<Page<ProyectoResponse>> listarPendientes(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        try {
+            log.info("GET /api/submissions/formatoA/pendientes - page: {}, size: {}", page, size);
+
+            // Crear Pageable
+            Pageable pageable = PageRequest.of(page, size);
+
+            // Ejecutar query
+            Page<ProyectoResponse> pendientes = listarPendientesQuery.listarPendientes(pageable);
+
+            log.info("Se encontraron {} Formatos A pendientes", pendientes.getTotalElements());
+
+            return ResponseEntity.ok(pendientes);
+
+        } catch (Exception e) {
+            log.error("Error al listar Formatos A pendientes: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

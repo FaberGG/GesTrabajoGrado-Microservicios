@@ -83,33 +83,42 @@ public class ReenviarFormatoAUseCase implements IReenviarFormatoAUseCase {
         String directorioBase = "proyectos/formatoA/" + proyectoId;
         
         String rutaPdf = null;
+        String nombrePdf = null;
         if (request.getPdfStream() != null) {
+            // Usar nombre del request o generar uno por defecto
+            nombrePdf = (request.getPdfNombreArchivo() != null && !request.getPdfNombreArchivo().trim().isEmpty()) ?
+                        request.getPdfNombreArchivo() : "formatoA_v" + nuevoNumeroIntento + ".pdf";
+
             rutaPdf = fileStoragePort.guardarArchivo(
                 request.getPdfStream(),
-                request.getPdfNombreArchivo() != null ? 
-                    request.getPdfNombreArchivo() : "formatoA_v" + nuevoNumeroIntento + ".pdf",
+                nombrePdf,
                 directorioBase
             );
-            log.debug("Nuevo PDF guardado en: {}", rutaPdf);
+            log.debug("Nuevo PDF guardado en: {} con nombre: {}", rutaPdf, nombrePdf);
         }
         
         String rutaCarta = null;
+        String nombreCarta = null;
         if (request.getCartaStream() != null) {
+            // Usar nombre del request o generar uno por defecto
+            nombreCarta = (request.getCartaNombreArchivo() != null && !request.getCartaNombreArchivo().trim().isEmpty()) ?
+                          request.getCartaNombreArchivo() : "carta_v" + nuevoNumeroIntento + ".pdf";
+
             rutaCarta = fileStoragePort.guardarArchivo(
                 request.getCartaStream(),
-                request.getCartaNombreArchivo() != null ? 
-                    request.getCartaNombreArchivo() : "carta_v" + nuevoNumeroIntento + ".pdf",
+                nombreCarta,
                 directorioBase
             );
-            log.debug("Nueva carta guardada en: {}", rutaCarta);
+            log.debug("Nueva carta guardada en: {} con nombre: {}", rutaCarta, nombreCarta);
         }
         
         // 5. Crear Value Objects y reenviar en el aggregate
-        ArchivoAdjunto nuevoPdf = rutaPdf != null ? 
-            ArchivoAdjunto.pdf(rutaPdf, request.getPdfNombreArchivo()) : null;
-        ArchivoAdjunto nuevaCarta = rutaCarta != null ? 
-            ArchivoAdjunto.pdf(rutaCarta, request.getCartaNombreArchivo()) : null;
-        
+        // Usar los nombres validados que no son null/empty
+        ArchivoAdjunto nuevoPdf = rutaPdf != null ?
+            ArchivoAdjunto.pdf(rutaPdf, nombrePdf) : null;
+        ArchivoAdjunto nuevaCarta = rutaCarta != null ?
+            ArchivoAdjunto.pdf(rutaCarta, nombreCarta) : null;
+
         proyecto.reenviarFormatoA(nuevoPdf, nuevaCarta);
         
         log.debug("Formato A reenviado. Nuevo intento: {}, Estado: {}", 

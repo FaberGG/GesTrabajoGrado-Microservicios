@@ -3,6 +3,8 @@ package co.unicauca.submission.application.port.out;
 import co.unicauca.submission.domain.model.Proyecto;
 import co.unicauca.submission.domain.model.ProyectoId;
 import co.unicauca.submission.domain.model.EstadoProyecto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +29,11 @@ public interface IProyectoRepositoryPort {
      * Busca proyectos por estado.
      */
     List<Proyecto> findByEstado(EstadoProyecto estado);
+
+    /**
+     * Busca proyectos por estado con paginación.
+     */
+    Page<Proyecto> findByEstadoPage(EstadoProyecto estado, Pageable pageable);
 
     /**
      * Busca proyectos por director.

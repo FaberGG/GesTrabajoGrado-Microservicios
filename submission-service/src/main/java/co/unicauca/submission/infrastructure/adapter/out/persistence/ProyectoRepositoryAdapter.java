@@ -8,6 +8,8 @@ import co.unicauca.submission.infrastructure.adapter.out.persistence.entity.Proy
 import co.unicauca.submission.infrastructure.adapter.out.persistence.mapper.ProyectoMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -79,6 +81,20 @@ public class ProyectoRepositoryAdapter implements IProyectoRepositoryPort {
                 return proyecto;
             })
             .collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<Proyecto> findByEstadoPage(EstadoProyecto estado, Pageable pageable) {
+        log.debug("Buscando proyectos por estado con paginación: {}, page: {}, size: {}",
+                estado, pageable.getPageNumber(), pageable.getPageSize());
+
+        Page<ProyectoEntity> entityPage = jpaRepository.findByEstado(estado, pageable);
+
+        return entityPage.map(entity -> {
+            Proyecto proyecto = mapper.toDomain(entity);
+            proyecto.setId(ProyectoId.of(entity.getId()));
+            return proyecto;
+        });
     }
 
     @Override

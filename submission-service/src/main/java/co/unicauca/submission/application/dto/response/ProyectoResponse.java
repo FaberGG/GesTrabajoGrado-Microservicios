@@ -23,6 +23,12 @@ public class ProyectoResponse {
     private Long estudiante1Id;
     private Long estudiante2Id;
 
+    // Información enriquecida (para clientes externos como review-service)
+    private String docenteDirectorNombre;
+    private String docenteDirectorEmail;
+    private List<String> estudiantesEmails;
+    private LocalDateTime fechaEnvio;  // Mapea a fechaCreacion para FormatoA
+
     // Estado
     private String estado;
     private String estadoDescripcion;
@@ -284,6 +290,40 @@ public class ProyectoResponse {
 
     public void setFechaModificacion(LocalDateTime fechaModificacion) {
         this.fechaModificacion = fechaModificacion;
+    }
+
+    // Getters y Setters para campos enriquecidos
+
+    public String getDocenteDirectorNombre() {
+        return docenteDirectorNombre;
+    }
+
+    public void setDocenteDirectorNombre(String docenteDirectorNombre) {
+        this.docenteDirectorNombre = docenteDirectorNombre;
+    }
+
+    public String getDocenteDirectorEmail() {
+        return docenteDirectorEmail;
+    }
+
+    public void setDocenteDirectorEmail(String docenteDirectorEmail) {
+        this.docenteDirectorEmail = docenteDirectorEmail;
+    }
+
+    public List<String> getEstudiantesEmails() {
+        return estudiantesEmails;
+    }
+
+    public void setEstudiantesEmails(List<String> estudiantesEmails) {
+        this.estudiantesEmails = estudiantesEmails;
+    }
+
+    public LocalDateTime getFechaEnvio() {
+        return fechaEnvio;
+    }
+
+    public void setFechaEnvio(LocalDateTime fechaEnvio) {
+        this.fechaEnvio = fechaEnvio;
     }
 }
 

@@ -2,6 +2,8 @@ package co.unicauca.submission.infrastructure.adapter.out.persistence;
 
 import co.unicauca.submission.domain.model.EstadoProyecto;
 import co.unicauca.submission.infrastructure.adapter.out.persistence.entity.ProyectoEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +22,11 @@ public interface ProyectoJpaRepository extends JpaRepository<ProyectoEntity, Lon
      * Busca proyectos por estado.
      */
     List<ProyectoEntity> findByEstado(EstadoProyecto estado);
+
+    /**
+     * Busca proyectos por estado con paginación.
+     */
+    Page<ProyectoEntity> findByEstado(EstadoProyecto estado, Pageable pageable);
 
     /**
      * Busca proyectos por director.

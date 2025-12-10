@@ -70,28 +70,39 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
         }
 
         String directorioBase = "proyectos/formatoA/" + userId;
+
+        // Validar y preparar nombre del PDF
+        String nombrePdf = (request.getPdfNombreArchivo() != null && !request.getPdfNombreArchivo().trim().isEmpty()) ?
+                          request.getPdfNombreArchivo() : "formatoA_v1.pdf";
+
         String rutaPdf = fileStoragePort.guardarArchivo(
             request.getPdfStream(),
-            request.getPdfNombreArchivo() != null ? request.getPdfNombreArchivo() : "formatoA_v1.pdf",
+            nombrePdf,
             directorioBase
         );
 
-        log.debug("PDF del Formato A guardado en: {}", rutaPdf);
+        log.debug("PDF del Formato A guardado en: {} con nombre: {}", rutaPdf, nombrePdf);
 
         // 3. Guardar carta de aceptación si aplica
         String rutaCarta = null;
+        String nombreCarta = null;
         if (request.getModalidad().requiereCarta()) {
             if (request.getCartaStream() == null) {
                 throw new IllegalArgumentException(
                     "La carta de aceptación es obligatoria para modalidad PRACTICA_PROFESIONAL"
                 );
             }
+
+            // Validar y preparar nombre de la carta
+            nombreCarta = (request.getCartaNombreArchivo() != null && !request.getCartaNombreArchivo().trim().isEmpty()) ?
+                         request.getCartaNombreArchivo() : "carta_v1.pdf";
+
             rutaCarta = fileStoragePort.guardarArchivo(
                 request.getCartaStream(),
-                request.getCartaNombreArchivo() != null ? request.getCartaNombreArchivo() : "carta_v1.pdf",
+                nombreCarta,
                 directorioBase
             );
-            log.debug("Carta de aceptación guardada en: {}", rutaCarta);
+            log.debug("Carta de aceptación guardada en: {} con nombre: {}", rutaCarta, nombreCarta);
         }
 
         // 4. Crear Value Objects del dominio
@@ -106,9 +117,11 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
             request.getEstudiante1Id(),
             request.getEstudiante2Id()
         );
-        ArchivoAdjunto pdfFormatoA = ArchivoAdjunto.pdf(rutaPdf, request.getPdfNombreArchivo());
+
+        // Usar los nombres validados que no son null/empty
+        ArchivoAdjunto pdfFormatoA = ArchivoAdjunto.pdf(rutaPdf, nombrePdf);
         ArchivoAdjunto carta = rutaCarta != null ?
-            ArchivoAdjunto.pdf(rutaCarta, request.getCartaNombreArchivo()) : null;
+            ArchivoAdjunto.pdf(rutaCarta, nombreCarta) : null;
 
         // 5. Crear el Aggregate usando Factory Method del dominio
         Proyecto proyecto = Proyecto.crearConFormatoA(
@@ -120,7 +133,13 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
             carta
         );
 
-        log.debug("Proyecto creado con estado: {}", proyecto.getEstado());
+        log.debug("Proyecto creado con estado inicial: {}", proyecto.getEstado());
+
+        // 5.1. Presentar automáticamente al coordinador para evaluación
+        // Transición: FORMATO_A_DILIGENCIADO → EN_EVALUACION_COORDINADOR
+        proyecto.presentarAlCoordinador();
+
+        log.info("Formato A presentado al coordinador - Estado: {}", proyecto.getEstado());
 
         // 6. Persistir el proyecto
         Proyecto proyectoGuardado = repositoryPort.save(proyecto);
