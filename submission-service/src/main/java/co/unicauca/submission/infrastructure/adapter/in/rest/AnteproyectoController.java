@@ -7,6 +7,11 @@ import co.unicauca.submission.application.port.in.IObtenerProyectoQuery;
 import co.unicauca.submission.application.port.in.IListarAnteproyectosPendientesQuery;
 import co.unicauca.submission.application.usecase.anteproyecto.AsignarEvaluadoresUseCase;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,14 +40,14 @@ public class AnteproyectoController {
 
     private final ISubirAnteproyectoUseCase subirUseCase;
     private final AsignarEvaluadoresUseCase asignarEvaluadoresUseCase;
-    private final co.unicauca.submission.application.port.in.IObtenerProyectoQuery obtenerProyectoQuery;
-    private final co.unicauca.submission.application.port.in.IListarAnteproyectosPendientesQuery listarPendientesQuery;
+    private final IObtenerProyectoQuery obtenerProyectoQuery;
+    private final IListarAnteproyectosPendientesQuery listarPendientesQuery;
 
     public AnteproyectoController(
             ISubirAnteproyectoUseCase subirUseCase,
             AsignarEvaluadoresUseCase asignarEvaluadoresUseCase,
-            co.unicauca.submission.application.port.in.IObtenerProyectoQuery obtenerProyectoQuery,
-            co.unicauca.submission.application.port.in.IListarAnteproyectosPendientesQuery listarPendientesQuery
+            IObtenerProyectoQuery obtenerProyectoQuery,
+            IListarAnteproyectosPendientesQuery listarPendientesQuery
     ) {
         this.subirUseCase = subirUseCase;
         this.asignarEvaluadoresUseCase = asignarEvaluadoresUseCase;
@@ -53,13 +58,22 @@ public class AnteproyectoController {
     /**
      * Obtener Anteproyecto por ID del proyecto
      * GET /api/submissions/anteproyecto/{proyectoId}
-     *
-     * Endpoint de compatibilidad para review-service.
      * Retorna información del proyecto si tiene anteproyecto.
      */
     @GetMapping("/{proyectoId}")
-    @Operation(summary = "Obtener Anteproyecto por ID", description = "Obtiene información de un Anteproyecto específico")
-    public ResponseEntity<ProyectoResponse> obtenerAnteproyecto(@PathVariable Long proyectoId) {
+    @Operation(summary = "Obtener Anteproyecto por ID",
+               description = "Obtiene información detallada de un Anteproyecto específico. Solo retorna proyectos que tienen anteproyecto subido.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Anteproyecto encontrado exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Proyecto no encontrado o no tiene anteproyecto asociado",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
+    public ResponseEntity<ProyectoResponse> obtenerAnteproyecto(
+            @Parameter(description = "ID del proyecto", required = true, example = "123")
+            @PathVariable Long proyectoId) {
         try {
             log.info("GET /api/submissions/anteproyecto/{}", proyectoId);
 
@@ -81,7 +95,6 @@ public class AnteproyectoController {
             return ResponseEntity.ok(response);
 
         } catch (co.unicauca.submission.domain.exception.ProyectoNotFoundException e) {
-            log.error("Anteproyecto {} no encontrado", proyectoId);
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
             log.error("Error al obtener Anteproyecto {}: {}", proyectoId, e.getMessage(), e);
@@ -92,14 +105,20 @@ public class AnteproyectoController {
     /**
      * RF8: Listar Anteproyectos Pendientes de Asignación
      * GET /api/submissions/anteproyecto/pendientes
-     *
      * Retorna anteproyectos en estado ANTEPROYECTO_ENVIADO (pendientes de asignar evaluadores).
      */
     @GetMapping("/pendientes")
     @Operation(summary = "Listar Anteproyectos Pendientes",
-               description = "RF8: El jefe de departamento lista anteproyectos pendientes para asignar evaluadores")
+               description = "RF8: El jefe de departamento lista anteproyectos pendientes para asignar evaluadores. Retorna proyectos en estado ANTEPROYECTO_ENVIADO.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de anteproyectos pendientes obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<org.springframework.data.domain.Page<ProyectoResponse>> listarPendientes(
+            @Parameter(description = "Número de página (0-indexed)", example = "0")
             @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página", example = "10")
             @RequestParam(defaultValue = "10") int size
     ) {
         try {
@@ -127,14 +146,28 @@ public class AnteproyectoController {
      * POST /api/submissions/anteproyecto/{proyectoId}
      */
     @PostMapping("/{proyectoId}")
-    @Operation(summary = "Subir Anteproyecto", description = "RF6: El director sube el anteproyecto")
+    @Operation(summary = "Subir Anteproyecto",
+               description = "RF6: El director sube el documento de anteproyecto para un proyecto cuyo Formato A fue aprobado.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Anteproyecto subido exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Error al procesar el archivo PDF",
+                     content = @Content),
+        @ApiResponse(responseCode = "404", description = "Proyecto no encontrado",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<ProyectoResponse> subir(
+            @Parameter(description = "ID del proyecto", required = true, example = "123")
             @PathVariable Long proyectoId,
+            @Parameter(description = "ID del usuario (docente director)", required = true, example = "12")
             @RequestHeader("X-User-Id") Long userId,
+            @Parameter(description = "Archivo PDF del anteproyecto", required = true)
             @RequestPart("pdf") MultipartFile pdf
     ) {
         try {
-            log.info("POST /api/v2/submissions/anteproyecto/{} - Usuario: {}", proyectoId, userId);
+            log.info("POST /api/submissions/anteproyecto/{} - Usuario: {}", proyectoId, userId);
 
             SubirAnteproyectoRequest request = new SubirAnteproyectoRequest();
             request.setPdfStream(pdf.getInputStream());
@@ -158,18 +191,33 @@ public class AnteproyectoController {
 
     /**
      * RF8: Asignar Evaluadores
-     * POST /api/v2/submissions/anteproyecto/{proyectoId}/evaluadores
+     * POST /api/submissions/anteproyecto/{proyectoId}/evaluadores
      */
     @PostMapping("/{proyectoId}/evaluadores")
-    @Operation(summary = "Asignar Evaluadores", description = "RF8: El jefe de departamento asigna evaluadores")
+    @Operation(summary = "Asignar Evaluadores",
+               description = "RF8: El jefe de departamento asigna dos evaluadores a un anteproyecto para su revisión.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Evaluadores asignados exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Parámetros inválidos",
+                     content = @Content),
+        @ApiResponse(responseCode = "404", description = "Proyecto no encontrado",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<ProyectoResponse> asignarEvaluadores(
+            @Parameter(description = "ID del proyecto", required = true, example = "123")
             @PathVariable Long proyectoId,
+            @Parameter(description = "ID del jefe de departamento", required = true, example = "3")
             @RequestHeader("X-User-Id") Long jefeDepartamentoId,
+            @Parameter(description = "ID del primer evaluador", required = true, example = "20")
             @RequestParam Long evaluador1Id,
+            @Parameter(description = "ID del segundo evaluador", required = true, example = "21")
             @RequestParam Long evaluador2Id
     ) {
         try {
-            log.info("POST /api/v2/submissions/anteproyecto/{}/evaluadores - Jefe: {}, Eval1: {}, Eval2: {}",
+            log.info("POST /api/submissions/anteproyecto/{}/evaluadores - Jefe: {}, Eval1: {}, Eval2: {}",
                     proyectoId, jefeDepartamentoId, evaluador1Id, evaluador2Id);
 
             // Ejecutar use case
@@ -187,4 +235,3 @@ public class AnteproyectoController {
         }
     }
 }
-

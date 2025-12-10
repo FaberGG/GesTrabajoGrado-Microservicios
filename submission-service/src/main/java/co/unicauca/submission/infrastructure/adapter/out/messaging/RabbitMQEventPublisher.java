@@ -5,6 +5,7 @@ import co.unicauca.submission.domain.event.DomainEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
  * Implementa el puerto IEventPublisherPort.
  */
 @Component
+@Profile("!local")
 public class RabbitMQEventPublisher implements IEventPublisherPort {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMQEventPublisher.class);

@@ -4,6 +4,7 @@ import co.unicauca.submission.application.port.out.INotificationPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -12,10 +13,10 @@ import java.util.Map;
 /**
  * Adaptador para enviar notificaciones a través de RabbitMQ.
  * Implementa el puerto INotificationPort.
- *
  * Las notificaciones serán consumidas por el notification-service.
  */
 @Component
+@Profile("!local")
 public class RabbitMQNotificationAdapter implements INotificationPort {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMQNotificationAdapter.class);

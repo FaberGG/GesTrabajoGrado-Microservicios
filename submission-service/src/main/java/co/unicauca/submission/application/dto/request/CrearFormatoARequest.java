@@ -1,6 +1,7 @@
 package co.unicauca.submission.application.dto.request;
 
 import co.unicauca.submission.domain.model.Modalidad;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -12,32 +13,59 @@ import java.util.List;
  * DTO de request para crear un Formato A inicial.
  * RF2: Docente crea Formato A.
  */
+@Schema(description = "Request para crear un nuevo Formato A (propuesta inicial de proyecto de grado)")
 public class CrearFormatoARequest {
 
+    @Schema(description = "Título del proyecto de grado",
+            example = "Sistema de IA para análisis de datos educativos",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "El título es obligatorio")
     private String titulo;
 
+    @Schema(description = "Modalidad del trabajo de grado",
+            example = "INVESTIGACION",
+            allowableValues = {"INVESTIGACION", "DESARROLLO_SOFTWARE", "PRACTICA_PROFESIONAL", "EMPRENDIMIENTO"},
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "La modalidad es obligatoria")
     private Modalidad modalidad;
 
+    @Schema(description = "Objetivo general del proyecto",
+            example = "Desarrollar un sistema de inteligencia artificial para el análisis de datos educativos",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "El objetivo general es obligatorio")
     private String objetivoGeneral;
 
+    @Schema(description = "Lista de objetivos específicos del proyecto",
+            example = "[\"Analizar los requerimientos del sistema\", \"Diseñar la arquitectura de la solución\", \"Implementar los módulos principales\"]",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "Debe haber al menos un objetivo específico")
     private List<String> objetivosEspecificos;
 
+    @Schema(description = "ID del estudiante principal (obligatorio)",
+            example = "1001",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "El estudiante 1 es obligatorio")
     private Long estudiante1Id;
 
-    private Long estudiante2Id; // Opcional
+    @Schema(description = "ID del segundo estudiante (opcional, para trabajos en dupla)",
+            example = "1002",
+            nullable = true)
+    private Long estudiante2Id;
 
-    private Long codirectorId; // Opcional
+    @Schema(description = "ID del codirector del proyecto (opcional)",
+            example = "15",
+            nullable = true)
+    private Long codirectorId;
 
-    // Streams de archivos (se setean desde el controller)
+    // Streams de archivos (se setean desde el controller, no aparecen en Swagger)
+    @Schema(hidden = true)
     private InputStream pdfStream;
+    @Schema(hidden = true)
     private String pdfNombreArchivo;
 
-    private InputStream cartaStream; // Obligatorio si modalidad = PRACTICA_PROFESIONAL
+    @Schema(hidden = true)
+    private InputStream cartaStream;
+    @Schema(hidden = true)
     private String cartaNombreArchivo;
 
     // Constructores

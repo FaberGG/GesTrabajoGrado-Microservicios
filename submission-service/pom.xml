@@ -97,6 +97,13 @@
             </exclusions>
         </dependency>
 
+        <!-- H2 Database para desarrollo local sin Docker -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Testcontainers -->
         <dependency>
             <groupId>org.testcontainers</groupId>

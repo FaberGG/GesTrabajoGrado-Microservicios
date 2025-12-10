@@ -4,6 +4,11 @@ import co.unicauca.submission.application.dto.response.ProyectoResponse;
 import co.unicauca.submission.application.port.in.IObtenerProyectoQuery;
 import co.unicauca.submission.domain.model.EstadoProyecto;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +46,17 @@ public class SubmissionController {
      * GET /api/submissions/{id}
      */
     @GetMapping("/{id}")
-    @Operation(summary = "Obtener proyecto por ID", description = "Consulta un proyecto específico")
-    public ResponseEntity<ProyectoResponse> obtenerPorId(@PathVariable Long id) {
+    @Operation(summary = "Obtener proyecto por ID",
+               description = "Consulta la información completa de un proyecto específico por su ID")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Proyecto encontrado exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Proyecto no encontrado",
+                     content = @Content)
+    })
+    public ResponseEntity<ProyectoResponse> obtenerPorId(
+            @Parameter(description = "ID del proyecto", required = true, example = "123")
+            @PathVariable Long id) {
         try {
             log.info("GET /api/submissions/{}", id);
 
@@ -62,8 +76,15 @@ public class SubmissionController {
      */
     @GetMapping("/estudiante/{estudianteId}")
     @Operation(summary = "Obtener proyectos de estudiante",
-               description = "RF5: El estudiante consulta el estado de sus proyectos")
-    public ResponseEntity<List<ProyectoResponse>> obtenerPorEstudiante(@PathVariable Long estudianteId) {
+               description = "RF5: El estudiante consulta el estado de todos sus proyectos de grado")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de proyectos obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
+    public ResponseEntity<List<ProyectoResponse>> obtenerPorEstudiante(
+            @Parameter(description = "ID del estudiante", required = true, example = "1001")
+            @PathVariable Long estudianteId) {
         try {
             log.info("GET /api/submissions/estudiante/{}", estudianteId);
 
@@ -83,8 +104,15 @@ public class SubmissionController {
      */
     @GetMapping("/director/{directorId}")
     @Operation(summary = "Obtener proyectos de director",
-               description = "Consulta todos los proyectos donde el usuario es director")
-    public ResponseEntity<List<ProyectoResponse>> obtenerPorDirector(@PathVariable Long directorId) {
+               description = "Consulta todos los proyectos donde el usuario es director o codirector")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de proyectos obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
+    public ResponseEntity<List<ProyectoResponse>> obtenerPorDirector(
+            @Parameter(description = "ID del director", required = true, example = "12")
+            @PathVariable Long directorId) {
         try {
             log.info("GET /api/submissions/director/{}", directorId);
 
@@ -104,8 +132,17 @@ public class SubmissionController {
      */
     @GetMapping("/estado/{estado}")
     @Operation(summary = "Obtener proyectos por estado",
-               description = "Filtra proyectos por su estado actual")
-    public ResponseEntity<List<ProyectoResponse>> obtenerPorEstado(@PathVariable EstadoProyecto estado) {
+               description = "Filtra proyectos por su estado actual. Estados válidos: FORMATO_A_ENVIADO, EN_EVALUACION_COORDINADOR, FORMATO_A_APROBADO, CORRECCIONES_SOLICITADAS, ANTEPROYECTO_ENVIADO, etc.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de proyectos obtenida exitosamente"),
+        @ApiResponse(responseCode = "400", description = "Estado inválido",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
+    public ResponseEntity<List<ProyectoResponse>> obtenerPorEstado(
+            @Parameter(description = "Estado del proyecto", required = true, example = "FORMATO_A_ENVIADO")
+            @PathVariable EstadoProyecto estado) {
         try {
             log.info("GET /api/submissions/estado/{}", estado);
 
@@ -125,7 +162,12 @@ public class SubmissionController {
      */
     @GetMapping
     @Operation(summary = "Obtener todos los proyectos",
-               description = "Lista todos los proyectos del sistema")
+               description = "Lista todos los proyectos de grado registrados en el sistema. Usar con precaución en producción.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de proyectos obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<List<ProyectoResponse>> obtenerTodos() {
         try {
             log.info("GET /api/submissions");
@@ -140,3 +182,4 @@ public class SubmissionController {
         }
     }
 }
+

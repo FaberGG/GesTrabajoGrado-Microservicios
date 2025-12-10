@@ -1,0 +1,77 @@
+# Perfil LOCAL - Para ejecutar sin Docker/PostgreSQL/RabbitMQ
+# Usa base de datos H2 en memoria
+
+server:
+  port: 8082
+
+spring:
+  application:
+    name: submission-service
+
+  # Base de datos H2 en memoria
+  datasource:
+    url: jdbc:h2:mem:submissiondb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    database-platform: org.hibernate.dialect.H2Dialect
+
+  # Deshabilitar RabbitMQ
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
+
+# Swagger habilitado
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# Feature flags
+feature:
+  hexagonal:
+    enabled: true
+    debug-mode: true
+
+# Almacenamiento local
+file:
+  storage:
+    path: ./uploads
+
+# Identity service (mock)
+identity:
+  base-url: http://localhost:8081
+  timeout-ms: 3000
+
+service:
+  internal:
+    token: local-dev-token
+
+notification:
+  default:
+    coordinador-email: test@local.com
+    jefe-departamento-email: test@local.com
+
+logging:
+  level:
+    root: INFO
+    co.unicauca.submission: DEBUG
+

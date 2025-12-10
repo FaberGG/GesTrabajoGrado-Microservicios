@@ -8,27 +8,33 @@ import co.unicauca.submission.application.port.in.ICrearFormatoAUseCase;
 import co.unicauca.submission.application.port.in.IEvaluarFormatoAUseCase;
 import co.unicauca.submission.application.port.in.IReenviarFormatoAUseCase;
 import co.unicauca.submission.application.port.in.IListarFormatoAPendientesQuery;
+import co.unicauca.submission.application.port.in.IObtenerProyectoQuery;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.http.MediaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import co.unicauca.submission.application.port.in.IObtenerProyectoQuery;
 
 import java.io.IOException;
 
 /**
- * REST Controller V2 para operaciones de Formato A.
- * Nueva implementación con arquitectura hexagonal.
+ * REST Controller para operaciones de Formato A.
+ * Implementación con arquitectura hexagonal.
  *
  * Endpoints:
  * - GET    /api/submissions/formatoA/{id}
@@ -48,16 +54,16 @@ public class FormatoAController {
     private final IReenviarFormatoAUseCase reenviarUseCase;
     private final IEvaluarFormatoAUseCase evaluarUseCase;
     private final IListarFormatoAPendientesQuery listarPendientesQuery;
-    private final co.unicauca.submission.application.port.in.IObtenerProyectoQuery obtenerProyectoQuery;
+    private final IObtenerProyectoQuery obtenerProyectoQuery;
     private final ObjectMapper objectMapper;
 
     public FormatoAController(
             ICrearFormatoAUseCase crearUseCase,
             IReenviarFormatoAUseCase reenviarUseCase,
             IEvaluarFormatoAUseCase evaluarUseCase,
-            @org.springframework.beans.factory.annotation.Qualifier("listarFormatoAPendientesQueryEnriched")
+            @Qualifier("listarFormatoAPendientesQueryEnriched")
             IListarFormatoAPendientesQuery listarPendientesQuery,
-            co.unicauca.submission.application.port.in.IObtenerProyectoQuery obtenerProyectoQuery,
+            IObtenerProyectoQuery obtenerProyectoQuery,
             ObjectMapper objectMapper
     ) {
         this.crearUseCase = crearUseCase;
@@ -71,13 +77,21 @@ public class FormatoAController {
     /**
      * Obtener Formato A por ID
      * GET /api/submissions/formatoA/{id}
-     *
-     * Endpoint de compatibilidad para review-service.
-     * Retorna información del proyecto si es un Formato A.
      */
     @GetMapping("/{id}")
-    @Operation(summary = "Obtener Formato A por ID", description = "Obtiene información de un Formato A específico")
-    public ResponseEntity<ProyectoResponse> obtenerFormatoA(@PathVariable Long id) {
+    @Operation(summary = "Obtener Formato A por ID",
+               description = "Obtiene información detallada de un Formato A específico por su ID. Solo retorna proyectos en fase de Formato A.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Formato A encontrado exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Formato A no encontrado o el proyecto no está en fase de Formato A",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
+    public ResponseEntity<ProyectoResponse> obtenerFormatoA(
+            @Parameter(description = "ID del proyecto/Formato A", required = true, example = "123")
+            @PathVariable Long id) {
         try {
             log.info("GET /api/submissions/formatoA/{}", id);
 
@@ -105,14 +119,27 @@ public class FormatoAController {
 
     /**
      * RF2: Crear Formato A
-     * POST /api/v2/submissions/formatoA
+     * POST /api/submissions/formatoA
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Crear Formato A", description = "RF2: El docente crea un nuevo proyecto con Formato A")
+    @Operation(summary = "Crear Formato A",
+               description = "RF2: El docente director crea un nuevo proyecto con Formato A. Requiere enviar los datos del proyecto en JSON y el archivo PDF del formato.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Formato A creado exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Datos inválidos, archivo vacío o excede el tamaño máximo (10MB)",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<ProyectoResponse> crear(
+            @Parameter(description = "ID del usuario (docente director)", required = true, example = "12")
             @RequestHeader("X-User-Id") Long userId,
+            @Parameter(description = "Datos del Formato A en formato JSON", required = true)
             @RequestPart(value = "data") String dataJson,
+            @Parameter(description = "Archivo PDF del Formato A (máximo 10MB)", required = true)
             @RequestPart("pdf") MultipartFile pdf,
+            @Parameter(description = "Carta de aceptación (requerida para modalidad PRACTICA_PROFESIONAL)")
             @RequestPart(value = "carta", required = false) MultipartFile carta
     ) {
         try {
@@ -149,7 +176,6 @@ public class FormatoAController {
                 request.setCartaNombreArchivo(carta.getOriginalFilename());
             }
 
-            // Ejecutar use case
             ProyectoResponse response = crearUseCase.crear(request, userId);
 
             log.info("Formato A creado exitosamente - ProyectoID: {}", response.getId());
@@ -170,27 +196,42 @@ public class FormatoAController {
 
     /**
      * RF4: Reenviar Formato A
-     * POST /api/v2/submissions/formatoA/{id}/reenviar
+     * POST /api/submissions/formatoA/{id}/reenviar
      */
     @PostMapping("/{id}/reenviar")
-    @Operation(summary = "Reenviar Formato A", description = "RF4: El docente reenvía nueva versión tras correcciones")
+    @Operation(summary = "Reenviar Formato A",
+               description = "RF4: El docente director reenvía una nueva versión del Formato A tras realizar correcciones solicitadas. Máximo 3 intentos permitidos.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Formato A reenviado exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Error al procesar archivos o se excedió el número máximo de intentos",
+                     content = @Content),
+        @ApiResponse(responseCode = "404", description = "Proyecto no encontrado",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<ProyectoResponse> reenviar(
+            @Parameter(description = "ID del proyecto", required = true, example = "123")
             @PathVariable Long id,
+            @Parameter(description = "ID del usuario (docente director)", required = true, example = "12")
             @RequestHeader("X-User-Id") Long userId,
+            @Parameter(description = "Nuevo archivo PDF del Formato A corregido")
             @RequestPart(value = "pdf", required = false) MultipartFile pdf,
+            @Parameter(description = "Nueva carta de aceptación (si aplica)")
             @RequestPart(value = "carta", required = false) MultipartFile carta
     ) {
         try {
-            log.info("POST /api/v2/submissions/formatoA/{}/reenviar - Usuario: {}", id, userId);
+            log.info("POST /api/submissions/formatoA/{}/reenviar - Usuario: {}", id, userId);
 
             ReenviarFormatoARequest request = new ReenviarFormatoARequest();
 
-            if (pdf != null) {
+            if (pdf != null && !pdf.isEmpty()) {
                 request.setPdfStream(pdf.getInputStream());
                 request.setPdfNombreArchivo(pdf.getOriginalFilename());
             }
 
-            if (carta != null) {
+            if (carta != null && !carta.isEmpty()) {
                 request.setCartaStream(carta.getInputStream());
                 request.setCartaNombreArchivo(carta.getOriginalFilename());
             }
@@ -214,17 +255,35 @@ public class FormatoAController {
 
     /**
      * RF3: Evaluar Formato A
-     * PATCH /api/v2/submissions/formatoA/{id}/evaluar
+     * PATCH /api/submissions/formatoA/{id}/evaluar
      */
     @PatchMapping("/{id}/evaluar")
-    @Operation(summary = "Evaluar Formato A", description = "RF3: El coordinador evalúa el Formato A")
+    @Operation(summary = "Evaluar Formato A",
+               description = "RF3: El coordinador evalúa el Formato A. Puede aprobarlo (pasa a fase de anteproyecto) o solicitar correcciones.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Formato A evaluado exitosamente",
+                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProyectoResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Datos de evaluación inválidos",
+                     content = @Content),
+        @ApiResponse(responseCode = "404", description = "Proyecto no encontrado",
+                     content = @Content),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<ProyectoResponse> evaluar(
+            @Parameter(description = "ID del proyecto", required = true, example = "123")
             @PathVariable Long id,
+            @Parameter(description = "ID del coordinador evaluador", required = true, example = "5")
             @RequestHeader("X-User-Id") Long evaluadorId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                description = "Datos de la evaluación",
+                required = true,
+                content = @Content(schema = @Schema(implementation = EvaluarFormatoARequest.class))
+            )
             @RequestBody @Valid EvaluarFormatoARequest request
     ) {
         try {
-            log.info("PATCH /api/v2/submissions/formatoA/{}/evaluar - Evaluador: {}, Aprobado: {}",
+            log.info("PATCH /api/submissions/formatoA/{}/evaluar - Evaluador: {}, Aprobado: {}",
                     id, evaluadorId, request.isAprobado());
 
             // Ejecutar use case
@@ -246,9 +305,17 @@ public class FormatoAController {
      * GET /api/submissions/formatoA/pendientes
      */
     @GetMapping("/pendientes")
-    @Operation(summary = "Listar Formatos A pendientes", description = "RF3: El coordinador lista los Formatos A pendientes de evaluación")
+    @Operation(summary = "Listar Formatos A pendientes",
+               description = "RF3: El coordinador lista los Formatos A pendientes de evaluación. Retorna resultados paginados.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de Formatos A pendientes obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                     content = @Content)
+    })
     public ResponseEntity<Page<ProyectoResponse>> listarPendientes(
+            @Parameter(description = "Número de página (0-indexed)", example = "0")
             @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página", example = "10")
             @RequestParam(defaultValue = "10") int size
     ) {
         try {
@@ -270,5 +337,3 @@ public class FormatoAController {
         }
     }
 }
-
-

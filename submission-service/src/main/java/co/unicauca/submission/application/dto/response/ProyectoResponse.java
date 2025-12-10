@@ -1,6 +1,7 @@
 package co.unicauca.submission.application.dto.response;
 
 import co.unicauca.submission.domain.model.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -9,46 +10,98 @@ import java.util.List;
  * DTO de response con información completa de un proyecto.
  * Usado para retornar al cliente después de operaciones.
  */
+@Schema(description = "Respuesta con información completa de un proyecto de grado")
 public class ProyectoResponse {
 
+    @Schema(description = "ID único del proyecto", example = "123")
     private Long id;
+
+    @Schema(description = "Título del proyecto de grado", example = "Sistema de IA para análisis de datos educativos")
     private String titulo;
+
+    @Schema(description = "Modalidad del trabajo de grado", example = "INVESTIGACION",
+            allowableValues = {"INVESTIGACION", "DESARROLLO_SOFTWARE", "PRACTICA_PROFESIONAL", "EMPRENDIMIENTO"})
     private String modalidad;
+
+    @Schema(description = "Objetivo general del proyecto", example = "Desarrollar un sistema de inteligencia artificial")
     private String objetivoGeneral;
+
+    @Schema(description = "Lista de objetivos específicos del proyecto")
     private List<String> objetivosEspecificos;
 
     // Participantes
+    @Schema(description = "ID del docente director del proyecto", example = "12")
     private Long directorId;
+
+    @Schema(description = "ID del codirector (opcional)", example = "15", nullable = true)
     private Long codirectorId;
+
+    @Schema(description = "ID del estudiante principal", example = "1001")
     private Long estudiante1Id;
+
+    @Schema(description = "ID del segundo estudiante (opcional, para duplas)", example = "1002", nullable = true)
     private Long estudiante2Id;
 
     // Información enriquecida (para clientes externos como review-service)
+    @Schema(description = "Nombre completo del docente director", example = "Dr. Juan Pérez García")
     private String docenteDirectorNombre;
+
+    @Schema(description = "Email del docente director", example = "jperez@unicauca.edu.co")
     private String docenteDirectorEmail;
+
+    @Schema(description = "Lista de emails de los estudiantes")
     private List<String> estudiantesEmails;
-    private LocalDateTime fechaEnvio;  // Mapea a fechaCreacion para FormatoA
+
+    @Schema(description = "Fecha de envío del Formato A", example = "2025-12-01T10:30:00")
+    private LocalDateTime fechaEnvio;
 
     // Estado
+    @Schema(description = "Estado actual del proyecto", example = "FORMATO_A_ENVIADO",
+            allowableValues = {"FORMATO_A_ENVIADO", "EN_EVALUACION_COORDINADOR", "FORMATO_A_APROBADO",
+                             "CORRECCIONES_SOLICITADAS", "FORMATO_A_RECHAZADO", "ANTEPROYECTO_ENVIADO",
+                             "ANTEPROYECTO_EN_EVALUACION", "ANTEPROYECTO_APROBADO", "ANTEPROYECTO_RECHAZADO"})
     private String estado;
+
+    @Schema(description = "Descripción legible del estado", example = "Formato A enviado, pendiente de evaluación")
     private String estadoDescripcion;
+
+    @Schema(description = "Indica si el proyecto está en un estado final", example = "false")
     private boolean esEstadoFinal;
 
     // Formato A
+    @Schema(description = "Número de intento actual del Formato A (máximo 3)", example = "1", minimum = "1", maximum = "3")
     private Integer numeroIntento;
+
+    @Schema(description = "Ruta al archivo PDF del Formato A", example = "/uploads/formatoA/proyecto-123-v1.pdf")
     private String rutaPdfFormatoA;
+
+    @Schema(description = "Ruta a la carta de aceptación (para prácticas profesionales)", example = "/uploads/cartas/carta-123.pdf", nullable = true)
     private String rutaCarta;
+
+    @Schema(description = "Indica si el proyecto tiene carta de aceptación adjunta", example = "false")
     private boolean tieneCartaAceptacion;
 
     // Anteproyecto (opcional)
+    @Schema(description = "Ruta al archivo PDF del anteproyecto", example = "/uploads/anteproyecto/proyecto-123.pdf", nullable = true)
     private String rutaPdfAnteproyecto;
+
+    @Schema(description = "Fecha de envío del anteproyecto", example = "2025-12-15T14:00:00", nullable = true)
     private LocalDateTime fechaEnvioAnteproyecto;
+
+    @Schema(description = "ID del primer evaluador asignado", example = "20", nullable = true)
     private Long evaluador1Id;
+
+    @Schema(description = "ID del segundo evaluador asignado", example = "21", nullable = true)
     private Long evaluador2Id;
+
+    @Schema(description = "Indica si el proyecto tiene evaluadores asignados", example = "false")
     private boolean tieneEvaluadoresAsignados;
 
     // Auditoría
+    @Schema(description = "Fecha de creación del proyecto", example = "2025-12-01T10:30:00")
     private LocalDateTime fechaCreacion;
+
+    @Schema(description = "Fecha de última modificación", example = "2025-12-05T16:45:00")
     private LocalDateTime fechaModificacion;
 
     // Constructores
