@@ -39,6 +39,7 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
     private final IIdentityServicePort identityServicePort;
     private final INotificationPort notificationPort;
     private final co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher;
+    private final co.unicauca.submission.domain.service.EstudianteValidationService estudianteValidationService;
 
     public CrearFormatoAUseCase(
             IProyectoRepositoryPort repositoryPort,
@@ -46,7 +47,8 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
             IEventPublisherPort eventPublisherPort,
             IIdentityServicePort identityServicePort,
             INotificationPort notificationPort,
-            co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher
+            co.unicauca.submission.infrastructure.adapter.out.messaging.EventEnricherService eventEnricher,
+            co.unicauca.submission.domain.service.EstudianteValidationService estudianteValidationService
     ) {
         this.repositoryPort = repositoryPort;
         this.fileStoragePort = fileStoragePort;
@@ -54,6 +56,7 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
         this.identityServicePort = identityServicePort;
         this.notificationPort = notificationPort;
         this.eventEnricher = eventEnricher;
+        this.estudianteValidationService = estudianteValidationService;
     }
 
     @Override
@@ -125,6 +128,21 @@ public class CrearFormatoAUseCase implements ICrearFormatoAUseCase {
         ArchivoAdjunto pdfFormatoA = ArchivoAdjunto.pdf(rutaPdf, nombrePdf);
         ArchivoAdjunto carta = rutaCarta != null ?
             ArchivoAdjunto.pdf(rutaCarta, nombreCarta) : null;
+
+        // 4.1. Validar que los estudiantes no tengan proyectos activos
+        estudianteValidationService.validarEstudianteNoTieneProyectoActivo(
+            request.getEstudiante1Id(),
+            null  // null porque es un proyecto nuevo
+        );
+
+        if (request.getEstudiante2Id() != null) {
+            estudianteValidationService.validarEstudianteNoTieneProyectoActivo(
+                request.getEstudiante2Id(),
+                null
+            );
+        }
+
+        log.debug("✅ Validación de estudiantes duplicados completada");
 
         // 5. Crear el Aggregate usando Factory Method del dominio
         Proyecto proyecto = Proyecto.crearConFormatoA(

@@ -201,8 +201,15 @@ public class IdentityServiceAdapter implements IIdentityServicePort {
             UsuarioInfo usuario = obtenerUsuario(userId);
 
             if (usuario != null && usuario.rol() != null) {
-                boolean tieneRol = usuario.rol().equalsIgnoreCase(rol);
-                log.debug("Usuario {} {} el rol {}", userId, tieneRol ? "tiene" : "no tiene", rol);
+                String rolUsuario = usuario.rol();
+
+                // Comparación flexible: soporta tanto inglés como español
+                boolean tieneRol = rolUsuario.equalsIgnoreCase(rol) ||
+                                  esRolEquivalente(rolUsuario, rol);
+
+                log.info("🔐 Verificación de rol - Usuario: {} ({}), Rol del usuario: '{}', Rol esperado: '{}', Tiene rol: {}",
+                        userId, usuario.nombreCompleto(), rolUsuario, rol, tieneRol);
+
                 return tieneRol;
             }
 
@@ -214,6 +221,50 @@ public class IdentityServiceAdapter implements IIdentityServicePort {
             // Por seguridad en caso de error de comunicación, permitimos la operación
             return true;
         }
+    }
+
+    /**
+     * Verifica si dos roles son equivalentes considerando inglés/español
+     */
+    private boolean esRolEquivalente(String rolUsuario, String rolEsperado) {
+        // Mapeo de roles en inglés a español
+        String rolUsuarioNorm = rolUsuario.toUpperCase().trim();
+        String rolEsperadoNorm = rolEsperado.toUpperCase().trim();
+
+        // Si son iguales directamente
+        if (rolUsuarioNorm.equals(rolEsperadoNorm)) {
+            return true;
+        }
+
+        // Mapeo inglés -> español
+        if (rolEsperadoNorm.equals("COORDINATOR") && rolUsuarioNorm.equals("COORDINADOR")) {
+            return true;
+        }
+        if (rolEsperadoNorm.equals("TEACHER") && rolUsuarioNorm.equals("DOCENTE")) {
+            return true;
+        }
+        if (rolEsperadoNorm.equals("STUDENT") && rolUsuarioNorm.equals("ESTUDIANTE")) {
+            return true;
+        }
+        if (rolEsperadoNorm.equals("DEPARTMENT_HEAD") && rolUsuarioNorm.equals("JEFE_DEPARTAMENTO")) {
+            return true;
+        }
+
+        // Mapeo español -> inglés (por si acaso)
+        if (rolEsperadoNorm.equals("COORDINADOR") && rolUsuarioNorm.equals("COORDINATOR")) {
+            return true;
+        }
+        if (rolEsperadoNorm.equals("DOCENTE") && rolUsuarioNorm.equals("TEACHER")) {
+            return true;
+        }
+        if (rolEsperadoNorm.equals("ESTUDIANTE") && rolUsuarioNorm.equals("STUDENT")) {
+            return true;
+        }
+        if (rolEsperadoNorm.equals("JEFE_DEPARTAMENTO") && rolUsuarioNorm.equals("DEPARTMENT_HEAD")) {
+            return true;
+        }
+
+        return false;
     }
 }
 

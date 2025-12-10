@@ -114,58 +114,46 @@ public class FormatoAController {
             @RequestPart(value = "data") String dataJson,
             @RequestPart("pdf") MultipartFile pdf,
             @RequestPart(value = "carta", required = false) MultipartFile carta
-    ) {
-        try {
-            log.info("POST /api/submissions/formatoA - Usuario: {}", userId);
-            log.debug("Data JSON recibido: {}", dataJson);
-            log.debug("PDF recibido - Nombre: {}, Tamaño: {}, ContentType: {}",
-                     pdf.getOriginalFilename(), pdf.getSize(), pdf.getContentType());
+    ) throws IOException {
+        log.info("POST /api/submissions/formatoA - Usuario: {}", userId);
+        log.debug("Data JSON recibido: {}", dataJson);
+        log.debug("PDF recibido - Nombre: {}, Tamaño: {}, ContentType: {}",
+                 pdf.getOriginalFilename(), pdf.getSize(), pdf.getContentType());
 
-            // Parsear el JSON a objeto CrearFormatoARequest
-            CrearFormatoARequest request = objectMapper.readValue(dataJson, CrearFormatoARequest.class);
+        // Parsear el JSON a objeto CrearFormatoARequest
+        CrearFormatoARequest request = objectMapper.readValue(dataJson, CrearFormatoARequest.class);
 
-            log.info("Título del proyecto: {}", request.getTitulo());
+        log.info("Título del proyecto: {}", request.getTitulo());
 
-            // Validar que el archivo no esté vacío
-            if (pdf.isEmpty()) {
-                log.error("El archivo PDF está vacío");
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            // Validar tamaño del archivo (máximo 10MB)
-            if (pdf.getSize() > 10 * 1024 * 1024) {
-                log.error("El archivo PDF excede el tamaño máximo permitido (10MB)");
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-            // Setear streams de archivos en el request
-            request.setPdfStream(pdf.getInputStream());
-            request.setPdfNombreArchivo(pdf.getOriginalFilename());
-
-            if (carta != null && !carta.isEmpty()) {
-                log.debug("Carta recibida - Nombre: {}, Tamaño: {}",
-                         carta.getOriginalFilename(), carta.getSize());
-                request.setCartaStream(carta.getInputStream());
-                request.setCartaNombreArchivo(carta.getOriginalFilename());
-            }
-
-            // Ejecutar use case
-            ProyectoResponse response = crearUseCase.crear(request, userId);
-
-            log.info("Formato A creado exitosamente - ProyectoID: {}", response.getId());
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-
-        } catch (IOException e) {
-            log.error("Error al procesar archivos o JSON: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } catch (IllegalArgumentException e) {
-            log.error("Error de validación: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } catch (Exception e) {
-            log.error("Error al crear Formato A: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        // Validar que el archivo no esté vacío
+        if (pdf.isEmpty()) {
+            log.error("El archivo PDF está vacío");
+            throw new IllegalArgumentException("El archivo PDF no puede estar vacío");
         }
+
+        // Validar tamaño del archivo (máximo 10MB)
+        if (pdf.getSize() > 10 * 1024 * 1024) {
+            log.error("El archivo PDF excede el tamaño máximo permitido (10MB)");
+            throw new IllegalArgumentException("El archivo PDF excede el tamaño máximo permitido (10MB)");
+        }
+
+        // Setear streams de archivos en el request
+        request.setPdfStream(pdf.getInputStream());
+        request.setPdfNombreArchivo(pdf.getOriginalFilename());
+
+        if (carta != null && !carta.isEmpty()) {
+            log.debug("Carta recibida - Nombre: {}, Tamaño: {}",
+                     carta.getOriginalFilename(), carta.getSize());
+            request.setCartaStream(carta.getInputStream());
+            request.setCartaNombreArchivo(carta.getOriginalFilename());
+        }
+
+        // Ejecutar use case - las excepciones de dominio se propagan al GlobalExceptionHandler
+        ProyectoResponse response = crearUseCase.crear(request, userId);
+
+        log.info("Formato A creado exitosamente - ProyectoID: {}", response.getId());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**
@@ -179,37 +167,28 @@ public class FormatoAController {
             @RequestHeader("X-User-Id") Long userId,
             @RequestPart(value = "pdf", required = false) MultipartFile pdf,
             @RequestPart(value = "carta", required = false) MultipartFile carta
-    ) {
-        try {
-            log.info("POST /api/v2/submissions/formatoA/{}/reenviar - Usuario: {}", id, userId);
+    ) throws IOException {
+        log.info("POST /api/v2/submissions/formatoA/{}/reenviar - Usuario: {}", id, userId);
 
-            ReenviarFormatoARequest request = new ReenviarFormatoARequest();
+        ReenviarFormatoARequest request = new ReenviarFormatoARequest();
 
-            if (pdf != null) {
-                request.setPdfStream(pdf.getInputStream());
-                request.setPdfNombreArchivo(pdf.getOriginalFilename());
-            }
-
-            if (carta != null) {
-                request.setCartaStream(carta.getInputStream());
-                request.setCartaNombreArchivo(carta.getOriginalFilename());
-            }
-
-            // Ejecutar use case
-            ProyectoResponse response = reenviarUseCase.reenviar(id, request, userId);
-
-            log.info("Formato A reenviado exitosamente - ProyectoID: {}, Intento: {}",
-                    id, response.getNumeroIntento());
-
-            return ResponseEntity.ok(response);
-
-        } catch (IOException e) {
-            log.error("Error al procesar archivos: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } catch (Exception e) {
-            log.error("Error al reenviar Formato A: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        if (pdf != null) {
+            request.setPdfStream(pdf.getInputStream());
+            request.setPdfNombreArchivo(pdf.getOriginalFilename());
         }
+
+        if (carta != null) {
+            request.setCartaStream(carta.getInputStream());
+            request.setCartaNombreArchivo(carta.getOriginalFilename());
+        }
+
+        // Ejecutar use case - las excepciones de dominio se propagan al GlobalExceptionHandler
+        ProyectoResponse response = reenviarUseCase.reenviar(id, request, userId);
+
+        log.info("Formato A reenviado exitosamente - ProyectoID: {}, Intento: {}",
+                id, response.getNumeroIntento());
+
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -223,22 +202,16 @@ public class FormatoAController {
             @RequestHeader("X-User-Id") Long evaluadorId,
             @RequestBody @Valid EvaluarFormatoARequest request
     ) {
-        try {
-            log.info("PATCH /api/v2/submissions/formatoA/{}/evaluar - Evaluador: {}, Aprobado: {}",
-                    id, evaluadorId, request.isAprobado());
+        log.info("PATCH /api/v2/submissions/formatoA/{}/evaluar - Evaluador: {}, Aprobado: {}",
+                id, evaluadorId, request.isAprobado());
 
-            // Ejecutar use case
-            ProyectoResponse response = evaluarUseCase.evaluar(id, request, evaluadorId);
+        // Ejecutar use case - las excepciones de dominio se propagan al GlobalExceptionHandler
+        ProyectoResponse response = evaluarUseCase.evaluar(id, request, evaluadorId);
 
-            log.info("Formato A evaluado exitosamente - ProyectoID: {}, Estado: {}",
-                    id, response.getEstado());
+        log.info("Formato A evaluado exitosamente - ProyectoID: {}, Estado: {}",
+                id, response.getEstado());
 
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Error al evaluar Formato A: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -251,23 +224,17 @@ public class FormatoAController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        try {
-            log.info("GET /api/submissions/formatoA/pendientes - page: {}, size: {}", page, size);
+        log.info("GET /api/submissions/formatoA/pendientes - page: {}, size: {}", page, size);
 
-            // Crear Pageable
-            Pageable pageable = PageRequest.of(page, size);
+        // Crear Pageable
+        Pageable pageable = PageRequest.of(page, size);
 
-            // Ejecutar query
-            Page<ProyectoResponse> pendientes = listarPendientesQuery.listarPendientes(pageable);
+        // Ejecutar query - las excepciones se propagan al GlobalExceptionHandler
+        Page<ProyectoResponse> pendientes = listarPendientesQuery.listarPendientes(pageable);
 
-            log.info("Se encontraron {} Formatos A pendientes", pendientes.getTotalElements());
+        log.info("Se encontraron {} Formatos A pendientes", pendientes.getTotalElements());
 
-            return ResponseEntity.ok(pendientes);
-
-        } catch (Exception e) {
-            log.error("Error al listar Formatos A pendientes: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(pendientes);
     }
 }
 

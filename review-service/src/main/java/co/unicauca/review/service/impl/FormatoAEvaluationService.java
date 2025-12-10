@@ -33,6 +33,9 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
     @Autowired
     private co.unicauca.review.service.EventPublisherService eventPublisher;
 
+    @Autowired
+    private co.unicauca.review.adapter.NotificationAdapter notificationAdapter;
+
     @Override
     protected DocumentInfo fetchDocument(Long documentId) {
         log.debug("Obteniendo información de Formato A con id: {}", documentId);
@@ -255,28 +258,39 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
 
     @Override
     protected boolean publishNotificationEvent(Evaluation eval, DocumentInfo doc) {
-        log.info("Publicando evento de notificación para Formato A {}", doc.getId());
-
-        NotificationEventDTO event = NotificationEventDTO.builder()
-            .eventType("FORMATO_A_EVALUATED")
-            .documentId(doc.getId())
-            .documentTitle(doc.getTitulo())
-            .documentType("FORMATO_A")
-            .decision(eval.getDecision().name())
-            .evaluatorName(doc.getDocenteDirectorName())
-            .evaluatorRole("COORDINADOR")
-            .observaciones(eval.getObservaciones())
-            .recipients(buildRecipients(doc))
-            .timestamp(LocalDateTime.now())
-            .build();
+        log.info("📧 Publicando notificación de evaluación para Formato A {} - RF3", doc.getId());
 
         try {
-            rabbitTemplate.convertAndSend(exchange, routingKey, event);
-            log.info("✓ Evento FORMATO_A_EVALUATED publicado en RabbitMQ: documentId={}, decision={}",
-                    doc.getId(), eval.getDecision());
+            // Construir lista de destinatarios (director + estudiantes)
+            List<String> recipients = buildRecipients(doc);
+
+            if (recipients.isEmpty()) {
+                log.warn("⚠️ No hay destinatarios para notificar sobre la evaluación del Formato A {}", doc.getId());
+                return false;
+            }
+
+            // Determinar el texto del resultado
+            String decision = eval.getDecision() == Decision.APROBADO ? "APROBADO" : "RECHAZADO";
+
+            // Nombre del evaluador (coordinador)
+            // TODO: Obtener nombre real desde identity-service usando eval.getEvaluatorId()
+            String evaluatedBy = "Coordinador del Programa";
+
+            // Usar el NotificationAdapter para enviar a notifications.q
+            notificationAdapter.notificarEvaluacionFormatoA(
+                doc.getId(),
+                doc.getTitulo(),
+                decision,
+                evaluatedBy,
+                eval.getObservaciones(),
+                recipients
+            );
+
+            log.info("✅ Notificación de evaluación publicada exitosamente para {} destinatarios", recipients.size());
             return true;
+
         } catch (Exception e) {
-            log.error("✗ Error publicando evento en RabbitMQ: {}", e.getMessage(), e);
+            log.error("❌ Error publicando notificación de evaluación: {}", e.getMessage(), e);
             return false;
         }
     }

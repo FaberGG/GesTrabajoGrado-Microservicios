@@ -86,9 +86,7 @@ public class Proyecto {
     ) {
         // Validar carta si es práctica profesional
         if (modalidad.requiereCarta() && cartaAceptacion == null) {
-            throw new IllegalArgumentException(
-                "La carta de aceptación es obligatoria para modalidad " + modalidad
-            );
+            throw new CartaAceptacionRequeridaException(modalidad.name());
         }
 
         Proyecto proyecto = new Proyecto();
@@ -140,6 +138,21 @@ public class Proyecto {
      * @param evaluadorId ID del coordinador que evalúa
      */
     public void evaluarFormatoA(boolean aprobado, String comentarios, Long evaluadorId) {
+        // Validar que no esté en estado final
+        if (this.estado == EstadoProyecto.FORMATO_A_APROBADO) {
+            throw new FormatoAYaEvaluadoException(
+                this.id != null ? this.id.getValue() : null,
+                "FORMATO_A_APROBADO"
+            );
+        }
+
+        if (this.estado == EstadoProyecto.FORMATO_A_RECHAZADO) {
+            throw new FormatoAYaEvaluadoException(
+                this.id != null ? this.id.getValue() : null,
+                "FORMATO_A_RECHAZADO"
+            );
+        }
+
         validarTransicion(EstadoProyecto.EN_EVALUACION_COORDINADOR);
 
         Evaluacion evaluacion = new Evaluacion(aprobado, comentarios, evaluadorId);
@@ -193,6 +206,14 @@ public class Proyecto {
      * @param nuevaCarta Nueva carta (si aplica)
      */
     public void reenviarFormatoA(ArchivoAdjunto nuevoPdf, ArchivoAdjunto nuevaCarta) {
+        // Validar que no esté rechazado definitivamente
+        if (this.estado == EstadoProyecto.FORMATO_A_RECHAZADO) {
+            throw new MaximosIntentosExcedidosException(
+                "No se puede reenviar el Formato A porque fue rechazado definitivamente tras 3 intentos. " +
+                "Debe iniciar un nuevo proyecto."
+            );
+        }
+
         validarTransicion(EstadoProyecto.CORRECCIONES_SOLICITADAS);
 
         if (this.formatoA.haAlcanzadoMaximoIntentos()) {

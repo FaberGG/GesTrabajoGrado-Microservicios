@@ -60,33 +60,24 @@ public class AnteproyectoController {
     @GetMapping("/{proyectoId}")
     @Operation(summary = "Obtener Anteproyecto por ID", description = "Obtiene información de un Anteproyecto específico")
     public ResponseEntity<ProyectoResponse> obtenerAnteproyecto(@PathVariable Long proyectoId) {
-        try {
-            log.info("GET /api/submissions/anteproyecto/{}", proyectoId);
+        log.info("GET /api/submissions/anteproyecto/{}", proyectoId);
 
-            ProyectoResponse response = obtenerProyectoQuery.obtenerPorId(proyectoId);
+        ProyectoResponse response = obtenerProyectoQuery.obtenerPorId(proyectoId);
 
-            // Verificar que tenga anteproyecto
-            if (response.getRutaPdfAnteproyecto() == null || response.getRutaPdfAnteproyecto().trim().isEmpty()) {
-                log.warn("Proyecto {} no tiene anteproyecto asociado, estado: {}", proyectoId, response.getEstado());
-                return ResponseEntity.notFound().build();
-            }
-
-            // Verificar que sea un proyecto en fase de anteproyecto
-            if (!response.getEstado().startsWith("ANTEPROYECTO")) {
-                log.warn("Proyecto {} no está en fase de anteproyecto, estado: {}", proyectoId, response.getEstado());
-                return ResponseEntity.notFound().build();
-            }
-
-            log.info("Anteproyecto {} obtenido correctamente, estado: {}", proyectoId, response.getEstado());
-            return ResponseEntity.ok(response);
-
-        } catch (co.unicauca.submission.domain.exception.ProyectoNotFoundException e) {
-            log.error("Anteproyecto {} no encontrado", proyectoId);
+        // Verificar que tenga anteproyecto
+        if (response.getRutaPdfAnteproyecto() == null || response.getRutaPdfAnteproyecto().trim().isEmpty()) {
+            log.warn("Proyecto {} no tiene anteproyecto asociado, estado: {}", proyectoId, response.getEstado());
             return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("Error al obtener Anteproyecto {}: {}", proyectoId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+
+        // Verificar que sea un proyecto en fase de anteproyecto
+        if (!response.getEstado().startsWith("ANTEPROYECTO")) {
+            log.warn("Proyecto {} no está en fase de anteproyecto, estado: {}", proyectoId, response.getEstado());
+            return ResponseEntity.notFound().build();
+        }
+
+        log.info("Anteproyecto {} obtenido correctamente, estado: {}", proyectoId, response.getEstado());
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -102,24 +93,18 @@ public class AnteproyectoController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        try {
-            log.info("GET /api/submissions/anteproyecto/pendientes - page: {}, size: {}", page, size);
+        log.info("GET /api/submissions/anteproyecto/pendientes - page: {}, size: {}", page, size);
 
-            org.springframework.data.domain.Pageable pageable =
-                org.springframework.data.domain.PageRequest.of(page, size);
+        org.springframework.data.domain.Pageable pageable =
+            org.springframework.data.domain.PageRequest.of(page, size);
 
-            org.springframework.data.domain.Page<ProyectoResponse> pendientes =
-                listarPendientesQuery.listarPendientes(pageable);
+        org.springframework.data.domain.Page<ProyectoResponse> pendientes =
+            listarPendientesQuery.listarPendientes(pageable);
 
-            log.info("Se encontraron {} anteproyectos pendientes de {} totales",
-                    pendientes.getNumberOfElements(), pendientes.getTotalElements());
+        log.info("Se encontraron {} anteproyectos pendientes de {} totales",
+                pendientes.getNumberOfElements(), pendientes.getTotalElements());
 
-            return ResponseEntity.ok(pendientes);
-
-        } catch (Exception e) {
-            log.error("Error al listar anteproyectos pendientes: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(pendientes);
     }
 
     /**
@@ -132,28 +117,19 @@ public class AnteproyectoController {
             @PathVariable Long proyectoId,
             @RequestHeader("X-User-Id") Long userId,
             @RequestPart("pdf") MultipartFile pdf
-    ) {
-        try {
-            log.info("POST /api/v2/submissions/anteproyecto/{} - Usuario: {}", proyectoId, userId);
+    ) throws IOException {
+        log.info("POST /api/v2/submissions/anteproyecto/{} - Usuario: {}", proyectoId, userId);
 
-            SubirAnteproyectoRequest request = new SubirAnteproyectoRequest();
-            request.setPdfStream(pdf.getInputStream());
-            request.setPdfNombreArchivo(pdf.getOriginalFilename());
+        SubirAnteproyectoRequest request = new SubirAnteproyectoRequest();
+        request.setPdfStream(pdf.getInputStream());
+        request.setPdfNombreArchivo(pdf.getOriginalFilename());
 
-            // Ejecutar use case
-            ProyectoResponse response = subirUseCase.subir(proyectoId, request, userId);
+        // Ejecutar use case - las excepciones de dominio se propagan al GlobalExceptionHandler
+        ProyectoResponse response = subirUseCase.subir(proyectoId, request, userId);
 
-            log.info("Anteproyecto subido exitosamente - ProyectoID: {}", proyectoId);
+        log.info("Anteproyecto subido exitosamente - ProyectoID: {}", proyectoId);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-
-        } catch (IOException e) {
-            log.error("Error al procesar archivo: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } catch (Exception e) {
-            log.error("Error al subir anteproyecto: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**
@@ -168,23 +144,17 @@ public class AnteproyectoController {
             @RequestParam Long evaluador1Id,
             @RequestParam Long evaluador2Id
     ) {
-        try {
-            log.info("POST /api/v2/submissions/anteproyecto/{}/evaluadores - Jefe: {}, Eval1: {}, Eval2: {}",
-                    proyectoId, jefeDepartamentoId, evaluador1Id, evaluador2Id);
+        log.info("POST /api/v2/submissions/anteproyecto/{}/evaluadores - Jefe: {}, Eval1: {}, Eval2: {}",
+                proyectoId, jefeDepartamentoId, evaluador1Id, evaluador2Id);
 
-            // Ejecutar use case
-            ProyectoResponse response = asignarEvaluadoresUseCase.asignar(
-                proyectoId, evaluador1Id, evaluador2Id, jefeDepartamentoId
-            );
+        // Ejecutar use case - las excepciones de dominio se propagan al GlobalExceptionHandler
+        ProyectoResponse response = asignarEvaluadoresUseCase.asignar(
+            proyectoId, evaluador1Id, evaluador2Id, jefeDepartamentoId
+        );
 
-            log.info("Evaluadores asignados exitosamente - ProyectoID: {}", proyectoId);
+        log.info("Evaluadores asignados exitosamente - ProyectoID: {}", proyectoId);
 
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("Error al asignar evaluadores: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(response);
     }
 }
 

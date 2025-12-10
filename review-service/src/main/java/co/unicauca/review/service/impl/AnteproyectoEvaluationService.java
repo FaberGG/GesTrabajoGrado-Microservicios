@@ -33,6 +33,9 @@ public class AnteproyectoEvaluationService extends EvaluationTemplate {
     @Autowired
     private AsignacionEvaluadoresRepository asignacionRepository;
 
+    @Autowired
+    private co.unicauca.review.adapter.NotificationAdapter notificationAdapter;
+
     @Override
     protected DocumentInfo fetchDocument(Long documentId) {
         log.debug("Obteniendo información de Anteproyecto con id: {}", documentId);
@@ -142,28 +145,36 @@ public class AnteproyectoEvaluationService extends EvaluationTemplate {
             return false;
         }
 
-        log.info("Publicando evento de notificación para Anteproyecto {} (ambos evaluadores completaron)", doc.getId());
-
-        NotificationEventDTO event = NotificationEventDTO.builder()
-            .eventType("ANTEPROYECTO_EVALUATED")
-            .documentId(doc.getId())
-            .documentTitle(doc.getTitulo())
-            .documentType("ANTEPROYECTO")
-            .decision(asignacion.getFinalDecision().name())
-            .evaluatorName("Evaluadores del Departamento")
-            .evaluatorRole("EVALUADOR")
-            .observaciones(buildFinalObservaciones(asignacion))
-            .recipients(buildRecipients(doc))
-            .timestamp(LocalDateTime.now())
-            .build();
+        log.info("📧 Publicando notificación de evaluación para Anteproyecto {} (ambos evaluadores completaron)", doc.getId());
 
         try {
-            rabbitTemplate.convertAndSend(exchange, routingKey, event);
-            log.info("✓ Evento ANTEPROYECTO_EVALUATED publicado en RabbitMQ: documentId={}, decisión={}",
-                    doc.getId(), asignacion.getFinalDecision());
+            // Construir lista de destinatarios (director + estudiantes)
+            List<String> recipients = buildRecipients(doc);
+
+            if (recipients.isEmpty()) {
+                log.warn("⚠️ No hay destinatarios para notificar sobre la evaluación del Anteproyecto {}", doc.getId());
+                return false;
+            }
+
+            // Obtener decisión final y observaciones
+            String decision = asignacion.getFinalDecision().name();
+            String observaciones = buildFinalObservaciones(asignacion);
+
+            // Usar el NotificationAdapter para enviar a notifications.q
+            notificationAdapter.notificarEvaluacionAnteproyecto(
+                doc.getId(),
+                doc.getTitulo(),
+                decision,
+                "Evaluadores del Departamento",
+                observaciones,
+                recipients
+            );
+
+            log.info("✅ Notificación de evaluación de anteproyecto publicada exitosamente para {} destinatarios", recipients.size());
             return true;
+
         } catch (Exception e) {
-            log.error("✗ Error publicando evento en RabbitMQ: {}", e.getMessage(), e);
+            log.error("❌ Error publicando notificación de evaluación de anteproyecto: {}", e.getMessage(), e);
             return false;
         }
     }
