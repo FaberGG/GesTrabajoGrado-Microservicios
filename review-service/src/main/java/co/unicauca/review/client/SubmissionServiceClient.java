@@ -81,8 +81,14 @@ public class SubmissionServiceClient {
             dto.setDocenteDirectorEmail((String) response.get("docenteDirectorEmail"));
             dto.setEstudiantesEmails((List<String>) response.get("estudiantesEmails"));
 
-            log.info("✅ Formato A mapeado correctamente: id={}, titulo={}, estado={}",
-                    dto.getId(), dto.getTitulo(), dto.getEstado());
+            // Mapear numeroIntento (versión del Formato A)
+            Object numeroIntentoObj = response.get("numeroIntento");
+            if (numeroIntentoObj instanceof Number) {
+                dto.setNumeroIntento(((Number) numeroIntentoObj).intValue());
+            }
+
+            log.info("✅ Formato A mapeado correctamente: id={}, titulo={}, estado={}, numeroIntento={}",
+                    dto.getId(), dto.getTitulo(), dto.getEstado(), dto.getNumeroIntento());
 
             return dto;
         } catch (ResourceNotFoundException | co.unicauca.review.exception.InvalidStateException e) {
@@ -385,6 +391,7 @@ public class SubmissionServiceClient {
         private String docenteDirectorNombre;
         private String docenteDirectorEmail;
         private List<String> estudiantesEmails;
+        private Integer numeroIntento; // Versión del Formato A (1, 2, o 3)
 
         public FormatoADTO() {}
 
@@ -405,6 +412,9 @@ public class SubmissionServiceClient {
 
         public List<String> getEstudiantesEmails() { return estudiantesEmails; }
         public void setEstudiantesEmails(List<String> emails) { this.estudiantesEmails = emails; }
+
+        public Integer getNumeroIntento() { return numeroIntento; }
+        public void setNumeroIntento(Integer numeroIntento) { this.numeroIntento = numeroIntento; }
     }
 
     public static class AnteproyectoDTO {

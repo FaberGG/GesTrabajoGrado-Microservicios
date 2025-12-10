@@ -66,7 +66,9 @@ public class RabbitMQConfig {
      */
     @Bean
     public Queue evaluacionProgressQueue() {
-        return QueueBuilder.durable("progress.evaluacion.queue").build();
+        return QueueBuilder.durable("progress.evaluacion.queue")
+                .ttl(86400000) // 24 horas en ms
+                .build();
     }
 
     /**

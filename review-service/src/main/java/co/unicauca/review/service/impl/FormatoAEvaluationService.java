@@ -166,6 +166,21 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
     protected void updateSubmissionService(Long docId, Decision decision, String obs, Integer evaluatorId) {
         log.info("Actualizando estado de Formato A {} en Submission Service", docId);
 
+        // ⚠️ IMPORTANTE: Obtener información del Formato A ANTES de actualizar submission
+        // para capturar el número de intento ANTES del cambio de estado
+        SubmissionServiceClient.FormatoADTO formatoAAntes = null;
+        try {
+            formatoAAntes = submissionClient.getFormatoA(docId);
+            log.debug("Formato A obtenido ANTES de actualizar - NumeroIntento: {}",
+                     formatoAAntes != null ? formatoAAntes.getNumeroIntento() : "null");
+        } catch (Exception e) {
+            log.warn("No se pudo obtener Formato A antes de actualizar: {}", e.getMessage());
+        }
+
+        // Publicar evento a progress-tracking ANTES de actualizar submission
+        // Esto asegura que progress-tracking reciba el número de intento correcto
+        publishProgressTrackingEvent(docId, decision, obs, evaluatorId, formatoAAntes);
+
         // Convertir Decision enum a Boolean para el nuevo API de submission-service
         Boolean aprobado = (decision == Decision.APROBADO);
         String comentarios = obs != null ? obs : "";
@@ -179,26 +194,27 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
 
         log.info("✅ Estado actualizado exitosamente en Submission Service: formatoAId={}, aprobado={}",
                 docId, aprobado);
-
-        // Publicar evento a progress-tracking
-        publishProgressTrackingEvent(docId, decision, obs, evaluatorId);
     }
 
     /**
      * Publica evento de Formato A evaluado a progress-tracking.
+     * ⚠️ IMPORTANTE: Este método debe llamarse ANTES de actualizar submission
+     * para poder obtener la versión actual antes de que cambie el estado.
      */
-    private void publishProgressTrackingEvent(Long docId, Decision decision, String obs, Integer evaluatorId) {
+    private void publishProgressTrackingEvent(Long docId, Decision decision, String obs, Integer evaluatorId,
+                                             SubmissionServiceClient.FormatoADTO formatoA) {
         try {
-            log.debug("Preparando evento formatoa.evaluado para progress-tracking");
+            log.info("📤 Preparando evento formatoa.evaluado para progress-tracking - Proyecto: {}, Decision: {}",
+                     docId, decision);
 
-            // Obtener información de submission
-            SubmissionServiceClient.FormatoADTO formatoA = submissionClient.getFormatoA(docId);
+            // Obtener versión actual del Formato A desde el DTO recibido
+            Integer version = (formatoA != null && formatoA.getNumeroIntento() != null) ?
+                              formatoA.getNumeroIntento() : 1;
 
-            // Version por defecto 1 (no disponible en DTO actual)
-            Integer version = 1; // TODO: Agregar numeroIntento al DTO cuando submission lo exponga
+            // Determinar si es rechazo definitivo (tercera versión rechazada)
+            boolean rechazadoDefinitivo = (decision == Decision.RECHAZADO && version >= 3);
 
-            // Determinar si es rechazo definitivo (por ahora false, hasta tener la versión real)
-            boolean rechazadoDefinitivo = false; // TODO: Calcular cuando tengamos version
+            log.info("📊 Versión Formato A: {}, Rechazo definitivo: {}", version, rechazadoDefinitivo);
 
             // Construir lista de estudiantes desde el DTO
             List<java.util.Map<String, Object>> estudiantes = new ArrayList<>();
@@ -229,9 +245,11 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
 
             eventPublisher.publishFormatoAEvaluado(evento);
 
+            log.info("✅ Evento formatoa.evaluado publicado exitosamente para proyecto {}", docId);
+
         } catch (Exception e) {
-            log.error("⚠️ Error publicando evento a progress-tracking (no crítico): {}", e.getMessage());
-            // No propagar excepción - la evaluación ya se guardó
+            log.error("❌ Error publicando evento a progress-tracking: {}", e.getMessage(), e);
+            // No propagar excepción - permitir que la evaluación continúe
         }
     }
 
