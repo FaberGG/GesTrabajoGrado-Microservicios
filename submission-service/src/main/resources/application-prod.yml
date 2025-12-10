@@ -97,6 +97,12 @@ identity:
   base-url: ${IDENTITY_SERVICE_URL:http://identity:8081}
   timeout-ms: 3000
 
+# Configuración de servicios externos
+services:
+  identity:
+    url: ${IDENTITY_SERVICE_URL:http://identity:8081}
+    service-token: ${IDENTITY_SERVICE_TOKEN:default-token-only-for-dev}
+
 # Token de servicio interno
 service:
   internal:

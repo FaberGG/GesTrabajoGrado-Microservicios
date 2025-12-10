@@ -50,5 +50,6 @@ file:
 services:
   identity:
     url: http://localhost:8081  # URL del identity-service
+    service-token: default-token-only-for-dev  # Token para autenticación entre servicios
 
 
