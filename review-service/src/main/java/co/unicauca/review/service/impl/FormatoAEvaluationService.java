@@ -30,6 +30,9 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
     @Autowired
     private SubmissionServiceClient submissionClient;
 
+    @Autowired
+    private co.unicauca.review.service.EventPublisherService eventPublisher;
+
     @Override
     protected DocumentInfo fetchDocument(Long documentId) {
         log.debug("Obteniendo información de Formato A con id: {}", documentId);
@@ -176,6 +179,60 @@ public class FormatoAEvaluationService extends EvaluationTemplate {
 
         log.info("✅ Estado actualizado exitosamente en Submission Service: formatoAId={}, aprobado={}",
                 docId, aprobado);
+
+        // Publicar evento a progress-tracking
+        publishProgressTrackingEvent(docId, decision, obs, evaluatorId);
+    }
+
+    /**
+     * Publica evento de Formato A evaluado a progress-tracking.
+     */
+    private void publishProgressTrackingEvent(Long docId, Decision decision, String obs, Integer evaluatorId) {
+        try {
+            log.debug("Preparando evento formatoa.evaluado para progress-tracking");
+
+            // Obtener información de submission
+            SubmissionServiceClient.FormatoADTO formatoA = submissionClient.getFormatoA(docId);
+
+            // Version por defecto 1 (no disponible en DTO actual)
+            Integer version = 1; // TODO: Agregar numeroIntento al DTO cuando submission lo exponga
+
+            // Determinar si es rechazo definitivo (por ahora false, hasta tener la versión real)
+            boolean rechazadoDefinitivo = false; // TODO: Calcular cuando tengamos version
+
+            // Construir lista de estudiantes desde el DTO
+            List<java.util.Map<String, Object>> estudiantes = new ArrayList<>();
+            if (formatoA != null && formatoA.getEstudiantesEmails() != null) {
+                for (int i = 0; i < formatoA.getEstudiantesEmails().size(); i++) {
+                    String email = formatoA.getEstudiantesEmails().get(i);
+                    estudiantes.add(java.util.Map.of(
+                        "id", i + 1, // ID temporal
+                        "nombre", "Estudiante " + (i + 1), // Nombre temporal
+                        "email", email
+                    ));
+                }
+            }
+
+            // Crear y publicar evento
+            co.unicauca.review.event.FormatoAEvaluadoEvent evento =
+                co.unicauca.review.event.FormatoAEvaluadoEvent.builder()
+                    .proyectoId(docId)
+                    .resultado(decision.name())
+                    .observaciones(obs != null ? obs : "")
+                    .version(version)
+                    .rechazadoDefinitivo(rechazadoDefinitivo)
+                    .usuarioResponsableId(evaluatorId != null ? evaluatorId.longValue() : null)
+                    .usuarioResponsableNombre("Coordinador") // TODO: Obtener nombre real
+                    .usuarioResponsableRol("COORDINADOR")
+                    .estudiantes(estudiantes)
+                    .build();
+
+            eventPublisher.publishFormatoAEvaluado(evento);
+
+        } catch (Exception e) {
+            log.error("⚠️ Error publicando evento a progress-tracking (no crítico): {}", e.getMessage());
+            // No propagar excepción - la evaluación ya se guardó
+        }
     }
 
     @Override

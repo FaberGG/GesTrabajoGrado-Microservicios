@@ -6,6 +6,7 @@ import co.unicauca.review.dto.response.AsignacionDTO;
 import co.unicauca.review.dto.response.EvaluadorInfoDTO;
 import co.unicauca.review.entity.AsignacionEvaluadores;
 import co.unicauca.review.enums.AsignacionEstado;
+import co.unicauca.review.event.EvaluadoresAsignadosEvent;
 import co.unicauca.review.exception.ResourceNotFoundException;
 import co.unicauca.review.repository.AsignacionEvaluadoresRepository;
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -28,12 +30,15 @@ public class AsignacionService {
 
     private final AsignacionEvaluadoresRepository asignacionRepository;
     private final SubmissionServiceClient submissionClient;
+    private final EventPublisherService eventPublisher;
 
     public AsignacionService(
             AsignacionEvaluadoresRepository asignacionRepository,
-            SubmissionServiceClient submissionClient) {
+            SubmissionServiceClient submissionClient,
+            EventPublisherService eventPublisher) {
         this.asignacionRepository = asignacionRepository;
         this.submissionClient = submissionClient;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -64,7 +69,49 @@ public class AsignacionService {
 
         log.info("Asignación creada exitosamente: id={}", saved.getId());
 
+        // Publicar evento a progress-tracking
+        publishEvaluadoresAsignadosEvent(saved, request);
+
         return mapToDTO(saved, anteproyecto.getTitulo());
+    }
+
+    /**
+     * Publica evento de evaluadores asignados a progress-tracking.
+     */
+    private void publishEvaluadoresAsignadosEvent(AsignacionEvaluadores asignacion, AsignacionRequestDTO request) {
+        try {
+            log.debug("Preparando evento evaluadores.asignados para progress-tracking");
+
+            // Construir lista de evaluadores
+            List<java.util.Map<String, Object>> evaluadores = new ArrayList<>();
+
+            // Evaluador 1
+            evaluadores.add(java.util.Map.of(
+                "id", asignacion.getEvaluador1Id(),
+                "nombre", "Evaluador 1" // TODO: Obtener nombre real de identity-service
+            ));
+
+            // Evaluador 2
+            evaluadores.add(java.util.Map.of(
+                "id", asignacion.getEvaluador2Id(),
+                "nombre", "Evaluador 2" // TODO: Obtener nombre real de identity-service
+            ));
+
+            // Crear y publicar evento
+            EvaluadoresAsignadosEvent evento = EvaluadoresAsignadosEvent.builder()
+                .proyectoId(asignacion.getAnteproyectoId())
+                .evaluadores(evaluadores)
+                .usuarioResponsableId(1L) // TODO: Obtener ID real del jefe que asigna
+                .usuarioResponsableNombre("Jefe de Departamento") // TODO: Obtener nombre real
+                .usuarioResponsableRol("JEFE_DEPARTAMENTO")
+                .build();
+
+            eventPublisher.publishEvaluadoresAsignados(evento);
+
+        } catch (Exception e) {
+            log.error("⚠️ Error publicando evento evaluadores.asignados (no crítico): {}", e.getMessage());
+            // No propagar excepción - la asignación ya se guardó
+        }
     }
 
     @Transactional(readOnly = true)
