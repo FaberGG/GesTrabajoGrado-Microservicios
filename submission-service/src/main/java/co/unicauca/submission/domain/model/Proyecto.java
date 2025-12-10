@@ -155,9 +155,10 @@ public class Proyecto {
                 this.formatoA.getNumeroIntento()
             ));
         } else {
-            this.formatoA.incrementarIntentos();
-
-            if (this.formatoA.haAlcanzadoMaximoIntentos()) {
+            // ⚠️ NO incrementar aquí - se incrementa al REENVIAR
+            // Verificar si ya alcanzó 3 intentos (está rechazando la tercera versión)
+            if (this.formatoA.getNumeroIntento() >= 3) {
+                // Tercer rechazo → Estado final
                 this.estado = EstadoProyecto.FORMATO_A_RECHAZADO;
                 registrarEvento(new FormatoAEvaluado(
                     this.id != null ? this.id.getValue() : null,
@@ -167,6 +168,7 @@ public class Proyecto {
                     this.formatoA.getNumeroIntento()
                 ));
             } else {
+                // Primer o segundo rechazo → Puede reenviar
                 this.estado = EstadoProyecto.CORRECCIONES_SOLICITADAS;
                 registrarEvento(new FormatoAEvaluado(
                     this.id != null ? this.id.getValue() : null,
@@ -199,6 +201,10 @@ public class Proyecto {
             );
         }
 
+        // ✅ Incrementar intento AL REENVIAR (no al rechazar)
+        this.formatoA.incrementarIntentos();
+
+        // Actualizar archivos
         this.formatoA.actualizarArchivos(nuevoPdf, nuevaCarta);
         this.estado = EstadoProyecto.EN_EVALUACION_COORDINADOR;
         this.fechaModificacion = LocalDateTime.now();
@@ -206,7 +212,7 @@ public class Proyecto {
         registrarEvento(new FormatoAReenviado(
             this.id != null ? this.id.getValue() : null,
             this.titulo.getValue(),
-            this.formatoA.getNumeroIntento()
+            this.formatoA.getNumeroIntento() // Ahora será 2 o 3
         ));
     }
 
