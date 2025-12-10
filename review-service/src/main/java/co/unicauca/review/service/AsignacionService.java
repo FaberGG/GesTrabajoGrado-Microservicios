@@ -67,9 +67,15 @@ public class AsignacionService {
 
     @Transactional(readOnly = true)
     public Page<AsignacionDTO> findAll(AsignacionEstado estado, int page, int size) {
-        log.debug("Listando todas las asignaciones - estado: {}, page: {}, size: {}",
-                estado, page, size);
+        log.info("Listando asignaciones - estado: {}, page: {}, size: {}", estado, page, size);
 
+        // Si se solicitan asignaciones PENDIENTES, obtener anteproyectos pendientes desde submission
+        if (estado == AsignacionEstado.PENDIENTE) {
+            log.info("Obteniendo anteproyectos pendientes desde submission-service");
+            return submissionClient.getAnteproyectosPendientes(page, size);
+        }
+
+        // Para otros estados, consultar BD local (asignaciones ya creadas)
         Pageable pageable = PageRequest.of(page, size, Sort.by("fechaAsignacion").descending());
 
         Page<AsignacionEvaluadores> asignaciones;

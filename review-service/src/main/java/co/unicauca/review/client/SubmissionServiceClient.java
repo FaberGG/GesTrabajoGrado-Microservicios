@@ -100,14 +100,118 @@ public class SubmissionServiceClient {
         log.debug("Obteniendo Anteproyecto con id: {}", anteproyectoId);
 
         try {
-            return webClient.get()
-                    .uri("/api/submissions/anteproyectos/{id}", anteproyectoId)
+            // Usar el endpoint correcto: /api/submissions/{id} (no /anteproyectos/{id})
+            Map<String, Object> response = webClient.get()
+                    .uri("/api/submissions/{id}", anteproyectoId)
                     .retrieve()
-                    .bodyToMono(AnteproyectoDTO.class)
+                    .onStatus(
+                        status -> status.value() == 404,
+                        clientResponse -> {
+                            log.warn("Anteproyecto {} no encontrado en submission-service (404)", anteproyectoId);
+                            return clientResponse.bodyToMono(String.class)
+                                .map(body -> new ResourceNotFoundException("Anteproyecto no encontrado: " + anteproyectoId));
+                        }
+                    )
+                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
                     .block();
-        } catch (Exception e) {
-            log.error("Error obteniendo Anteproyecto {}: {}", anteproyectoId, e.getMessage());
+
+            if (response == null) {
+                throw new ResourceNotFoundException("Anteproyecto no encontrado: " + anteproyectoId);
+            }
+
+            log.debug("Proyecto obtenido del submission-service: {}", response);
+
+            // Verificar que sea un Anteproyecto (no solo Formato A)
+            String estado = response.get("estado") != null ? response.get("estado").toString() : null;
+            String rutaPdfAnteproyecto = (String) response.get("rutaPdfAnteproyecto");
+
+            if (rutaPdfAnteproyecto == null || rutaPdfAnteproyecto.trim().isEmpty()) {
+                log.warn("Proyecto {} no tiene anteproyecto asociado. Estado: {}", anteproyectoId, estado);
+                throw new ResourceNotFoundException("El proyecto no tiene un anteproyecto asociado: " + anteproyectoId);
+            }
+
+            // Mapear a AnteproyectoDTO
+            AnteproyectoDTO dto = new AnteproyectoDTO();
+            dto.setId(((Number) response.get("id")).longValue());
+            dto.setTitulo((String) response.get("titulo"));
+            dto.setEstado(estado);
+            dto.setDocenteDirectorNombre((String) response.get("docenteDirectorNombre"));
+            dto.setDocenteDirectorEmail((String) response.get("docenteDirectorEmail"));
+            dto.setEstudiantesEmails((List<String>) response.get("estudiantesEmails"));
+
+            log.info("✅ Anteproyecto mapeado correctamente: id={}, titulo={}, estado={}",
+                    dto.getId(), dto.getTitulo(), dto.getEstado());
+
+            return dto;
+
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException.NotFound e) {
+            log.error("Anteproyecto {} no encontrado (404): {}", anteproyectoId, e.getMessage());
             throw new ResourceNotFoundException("Anteproyecto no encontrado: " + anteproyectoId);
+        } catch (Exception e) {
+            log.error("Error obteniendo Anteproyecto {}: {}", anteproyectoId, e.getMessage(), e);
+            throw new ResourceNotFoundException("Anteproyecto no encontrado: " + anteproyectoId);
+        }
+    }
+
+    public Page<co.unicauca.review.dto.response.AsignacionDTO> getAnteproyectosPendientes(int page, int size) {
+        log.info("Obteniendo Anteproyectos pendientes desde submission - page: {}, size: {}", page, size);
+
+        try {
+            Map<String, Object> response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/submissions/anteproyecto/pendientes")
+                            .queryParam("page", page)
+                            .queryParam("size", size)
+                            .build())
+                    .retrieve()
+                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block();
+
+            if (response == null || !response.containsKey("content")) {
+                log.warn("La respuesta no contiene anteproyectos pendientes");
+                return Page.empty();
+            }
+
+            log.debug("Respuesta recibida: {}", response);
+
+            // Extraer el contenido (lista de Anteproyectos)
+            List<Map<String, Object>> content = (List<Map<String, Object>>) response.get("content");
+
+            // Convertir a AsignacionDTO (anteproyectos pendientes = asignaciones pendientes)
+            List<co.unicauca.review.dto.response.AsignacionDTO> asignaciones = content.stream()
+                    .map(item -> new co.unicauca.review.dto.response.AsignacionDTO(
+                        null, // asignacionId - no hay asignación aún
+                        ((Number) item.get("id")).longValue(), // anteproyectoId
+                        (String) item.get("titulo"), // tituloAnteproyecto
+                        null, // evaluador1 - no asignado aún
+                        null, // evaluador2 - no asignado aún
+                        co.unicauca.review.enums.AsignacionEstado.PENDIENTE, // estado
+                        null, // fechaAsignacion - no asignado aún
+                        null, // fechaCompletado - no completado aún
+                        null  // finalDecision - no evaluado aún
+                    ))
+                    .toList();
+
+            // Construir Page
+            Map<String, Object> pageable = (Map<String, Object>) response.get("pageable");
+            int totalElements = ((Number) response.get("totalElements")).intValue();
+            int pageNumber = ((Number) pageable.get("pageNumber")).intValue();
+            int pageSize = ((Number) pageable.get("pageSize")).intValue();
+
+            log.info("✅ Se recibieron {} anteproyectos pendientes de {} totales",
+                    asignaciones.size(), totalElements);
+
+            return new org.springframework.data.domain.PageImpl<>(
+                    asignaciones,
+                    org.springframework.data.domain.PageRequest.of(pageNumber, pageSize),
+                    totalElements
+            );
+
+        } catch (Exception e) {
+            log.error("Error obteniendo anteproyectos pendientes: {}", e.getMessage(), e);
+            return Page.empty();
         }
     }
 
