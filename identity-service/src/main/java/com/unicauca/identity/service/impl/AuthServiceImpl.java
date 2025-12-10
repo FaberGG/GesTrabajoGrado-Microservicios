@@ -3,10 +3,7 @@ package com.unicauca.identity.service.impl;
 import com.unicauca.identity.dto.request.LoginRequest;
 import com.unicauca.identity.dto.request.RegisterRequest;
 import com.unicauca.identity.dto.request.VerifyTokenRequest;
-import com.unicauca.identity.dto.response.LoginResponse;
-import com.unicauca.identity.dto.response.RolesResponse;
-import com.unicauca.identity.dto.response.TokenVerificationResponse;
-import com.unicauca.identity.dto.response.UserResponse;
+import com.unicauca.identity.dto.response.*;
 import com.unicauca.identity.entity.User;
 import com.unicauca.identity.enums.Programa;
 import com.unicauca.identity.enums.Rol;
@@ -14,43 +11,43 @@ import com.unicauca.identity.exception.EmailAlreadyExistsException;
 import com.unicauca.identity.exception.InvalidCredentialsException;
 import com.unicauca.identity.exception.InvalidTokenException;
 import com.unicauca.identity.exception.UserNotFoundException;
+import com.unicauca.identity.facade.IdentityFacade;
 import com.unicauca.identity.repository.UserRepository;
-import com.unicauca.identity.security.JwtTokenProvider;
 import com.unicauca.identity.service.AuthService;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.Callable;
+import java.util.Optional;
 
 /**
- * Implementación del servicio de autenticación
+ * Implementación del servicio de autenticación.
+ * Delegación de operaciones de seguridad (hashing y JWT) a IdentityFacade.
  */
 @Service
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final IdentityFacade identityFacade;
 
-    // Logger estático para esta clase
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthServiceImpl.class);
 
-    // Constructor explícito para la inyección de dependencias
-    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider) {
+    /**
+     * Constructor con @Lazy para evitar dependencia circular
+     * (IdentityFacade → AuthService → IdentityFacade)
+     */
+    public AuthServiceImpl(UserRepository userRepository,
+                           @Lazy IdentityFacade identityFacade) {
         this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtTokenProvider = jwtTokenProvider;
+        this.identityFacade = identityFacade;
     }
 
     @Override
@@ -61,7 +58,7 @@ public class AuthServiceImpl implements AuthService {
             throw new EmailAlreadyExistsException();
         }
 
-        // Crear nuevo usuario con contraseña encriptada
+        // Crear nuevo usuario con contraseña encriptada usando Facade
         User newUser = User.builder()
                 .nombres(request.nombres())
                 .apellidos(request.apellidos())
@@ -69,7 +66,7 @@ public class AuthServiceImpl implements AuthService {
                 .programa(request.programa())
                 .rol(request.rol())
                 .email(request.email())
-                .passwordHash(passwordEncoder.encode(request.password()))
+                .passwordHash(identityFacade.hashPassword(request.password()))
                 .build();
 
         User savedUser = userRepository.save(newUser);
@@ -84,13 +81,13 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(InvalidCredentialsException::new);
 
-        // Verificar contraseña
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        // Verificar contraseña usando Facade
+        if (!identityFacade.verifyPassword(request.password(), user.getPasswordHash())) {
             throw new InvalidCredentialsException();
         }
 
-        // Generar token JWT
-        String token = jwtTokenProvider.generateToken(user);
+        // Generar token JWT usando Facade
+        String token = identityFacade.generateToken(user);
 
         log.info("Usuario autenticado exitosamente: {}", user.getEmail());
 
@@ -130,11 +127,13 @@ public class AuthServiceImpl implements AuthService {
             // Utilizar CompletableFuture con Virtual Threads en lugar de start/join directo
             return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
                 try {
-                    if (!jwtTokenProvider.validateToken(request.token())) {
+                    // Validar token usando Facade
+                    if (!identityFacade.validateToken(request.token())) {
                         return TokenVerificationResponse.invalid("Token inválido o expirado");
                     }
 
-                    Claims claims = jwtTokenProvider.getAllClaimsFromToken(request.token());
+                    // Extraer claims usando Facade
+                    Claims claims = identityFacade.extractAllClaims(request.token());
                     Long userId = Long.valueOf(claims.get("userId").toString());
                     String email = claims.getSubject();
                     Rol rol = Rol.valueOf(claims.get("rol").toString());
@@ -237,5 +236,57 @@ public class AuthServiceImpl implements AuthService {
             Page<User> users = userRepository.findAll(spec, pageable);
             return users.map(this::mapUserToUserResponse);
         }
+    }
+
+
+    @Override
+    public UserBasicInfoDTO getUserBasicInfo(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        return UserBasicInfoDTO.builder()
+                .id(user.getId())
+                .nombres(user.getNombres())
+                .apellidos(user.getApellidos())
+                .email(user.getEmail())
+                .rol(user.getRol())
+                .programa(user.getPrograma())
+                .build();
+    }
+
+    @Override
+    public UserBasicInfoDTO getCoordinador() {
+        User coordinador = userRepository.findFirstByRol(Rol.COORDINADOR)
+                .orElseThrow(() -> new UserNotFoundException("No se encontró ningún coordinador en el sistema"));
+
+        return UserBasicInfoDTO.builder()
+                .id(coordinador.getId())
+                .nombres(coordinador.getNombres())
+                .apellidos(coordinador.getApellidos())
+                .email(coordinador.getEmail())
+                .rol(coordinador.getRol())
+                .programa(coordinador.getPrograma())
+                .build();
+    }
+
+    @Override
+    public UserBasicInfoDTO getJefeDepartamento() {
+        User jefe = userRepository.findFirstByRol(Rol.JEFE_DEPARTAMENTO)
+                .orElseThrow(() -> new UserNotFoundException("No se encontró ningún jefe de departamento en el sistema"));
+
+        return UserBasicInfoDTO.builder()
+                .id(jefe.getId())
+                .nombres(jefe.getNombres())
+                .apellidos(jefe.getApellidos())
+                .email(jefe.getEmail())
+                .rol(jefe.getRol())
+                .programa(jefe.getPrograma())
+                .build();
+    }
+
+    @Override
+    public Optional<String> getEmailByRole(Rol rol) {
+        return userRepository.findFirstByRol(rol)
+                .map(User::getEmail);
     }
 }

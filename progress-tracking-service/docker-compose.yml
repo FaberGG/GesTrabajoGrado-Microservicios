@@ -1,0 +1,68 @@
+services:
+  # ========================================
+  # POSTGRESQL - Base de Datos
+  # ========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: progress-tracking-postgres
+    environment:
+      POSTGRES_DB: progress_tracking_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - progress-tracking-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================================
+  # RABBITMQ - Message Broker
+  # ========================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: progress-tracking-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # Puerto AMQP
+      - "15672:15672" # Puerto Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - progress-tracking-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================================
+  # PGADMIN (opcional) - UI para PostgreSQL
+  # ========================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: progress-tracking-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - progress-tracking-network
+    depends_on:
+      - postgres
+
+networks:
+  progress-tracking-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:

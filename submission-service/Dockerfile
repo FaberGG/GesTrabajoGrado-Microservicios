@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pom.xml .
 
 # Descargar dependencias (se cachea si pom.xml no cambia)
-RUN mvn -B -DskipTests clean package
+RUN mvn dependency:go-offline -B
 
 # Copiar código fuente
 COPY src ./src
@@ -46,14 +46,13 @@ ENV SPRING_PROFILES_ACTIVE="prod" \
     SERVER_PORT="8082"
 
 # Health check para Docker
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health || exit 1
 
-#Usar optimizaciones JVM más robustas
+# Comando de inicio con optimizaciones JVM para contenedores
 ENTRYPOINT ["java", \
-  "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
-  "-XX:InitialRAMPercentage=50.0", \
-  "-Djava.security.egd=file:/dev/./urandom", \
-  "-jar", \
-  "app.jar"]
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-jar", \
+    "app.jar"]

@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: noti_pass
       POSTGRES_DB: notification_db
     ports:
-      - "5433:5432"
+      - "5435:5435"
     volumes:
       - notification-db-data:/var/lib/postgresql/data
     healthcheck:

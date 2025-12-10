@@ -1,7 +1,14 @@
-version: '3.8'
+# ============================================================
+# DOCKER COMPOSE GLOBAL - RAÍZ DEL PROYECTO
+# ============================================================
+# Este archivo va en la RAÍZ del proyecto
+# Orquesta TODOS los microservicios del sistema
+# ============================================================
 
 services:
-  # API Gateway - Punto de entrada único al sistema
+  # ============================================================
+  # API GATEWAY - Punto de entrada único al sistema
+  # ============================================================
   gateway:
     build:
       context: ./gateway-service
@@ -14,23 +21,29 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - JWT_SECRET=${JWT_SECRET}
       - GATEWAY_PORT=8080
+      - GATEWAY_ENFORCE_ROLE_CHECK=${GATEWAY_ENFORCE_ROLE_CHECK}
+      - GATEWAY_CONNECT_TIMEOUT=${GATEWAY_CONNECT_TIMEOUT}
+      - GATEWAY_READ_TIMEOUT=${GATEWAY_READ_TIMEOUT}
       - IDENTITY_URL=http://identity:8081
       - SUBMISSION_URL=http://submission:8082
       - NOTIFICATION_URL=http://notification:8083
-      - GATEWAY_ENFORCE_ROLE_CHECK=true
-      - GATEWAY_CONNECT_TIMEOUT=5000
-      - GATEWAY_READ_TIMEOUT=30000
+      - REVIEW_URL=http://review:8084
+      - TRACKING_URL=http://tracking:8085
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=${RABBITMQ_USER}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
     depends_on:
       identity:
-        condition: service_healthy
+        condition: service_started
       submission:
-        condition: service_healthy
+        condition: service_started
       notification:
-        condition: service_healthy
+        condition: service_started
+      review:
+        condition: service_started
+      tracking:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
     networks:
@@ -50,7 +63,9 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Identity Service - Autenticación y gestión de usuarios
+  # ============================================================
+  # IDENTITY SERVICE - Autenticación y gestión de usuarios
+  # ============================================================
   identity:
     build:
       context: ./identity-service
@@ -63,7 +78,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8081
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=jdbc:postgresql://postgres-identity:5432/identity_db
+      - DATABASE_URL=jdbc:postgresql://postgres-identity:5432/${IDENTITY_DB_NAME}
       - DATABASE_USERNAME=${IDENTITY_DB_USER}
       - DATABASE_PASSWORD=${IDENTITY_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
@@ -92,7 +107,9 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Submission Service - Gestión de entregas y documentos
+  # ============================================================
+  # SUBMISSION SERVICE - Gestión de entregas y documentos
+  # ============================================================
   submission:
     build:
       context: ./submission-service
@@ -105,13 +122,18 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8082
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=jdbc:postgresql://postgres-submission:5432/submission_db
+      - DATABASE_URL=jdbc:postgresql://postgres-submission:5432/${SUBMISSION_DB_NAME}
       - DATABASE_USERNAME=${SUBMISSION_DB_USER}
       - DATABASE_PASSWORD=${SUBMISSION_DB_PASS}
+      - DATABASE_HOST=postgres-submission
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=submission_db
+      - SUBMISSION_DB_USER=${SUBMISSION_DB_USER}
+      - SUBMISSION_DB_PASS=${SUBMISSION_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-      - RABBITMQ_USERNAME=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
       - FILE_STORAGE_PATH=/app/uploads
     volumes:
       - submission-uploads:/app/uploads
@@ -126,8 +148,8 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
     deploy:
       resources:
         limits:
@@ -137,7 +159,9 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Notification Service - Envío de notificaciones
+  # ============================================================
+  # NOTIFICATION SERVICE - Envío de notificaciones
+  # ============================================================
   notification:
     build:
       context: ./notification-service
@@ -150,7 +174,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=8083
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=jdbc:postgresql://postgres-notification:5432/notification_db
+      - DATABASE_URL=jdbc:postgresql://postgres-notification:5432/${NOTIFICATION_DB_NAME}
       - DATABASE_USERNAME=${NOTIFICATION_DB_USER}
       - DATABASE_PASSWORD=${NOTIFICATION_DB_PASS}
       - RABBITMQ_HOST=rabbitmq
@@ -186,7 +210,98 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # RabbitMQ - Message Broker para comunicación asíncrona
+  # ============================================================
+  # REVIEW SERVICE - Evaluación de documentos
+  # ============================================================
+  review:
+    build:
+      context: ./review-service
+      dockerfile: Dockerfile
+    container_name: review-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_PORT=8084
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=jdbc:postgresql://postgres-review:5432/${REVIEW_DB_NAME}
+      - DATABASE_USERNAME=${REVIEW_DB_USER}
+      - DATABASE_PASSWORD=${REVIEW_DB_PASS}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+      - SUBMISSION_URL=http://submission:8082
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-review:
+        condition: service_healthy
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================
+  # PROGRESS TRACKING SERVICE - Historial y estado (CQRS Read)
+  # ============================================================
+  tracking:
+    build:
+      context: ./progress-tracking-service
+      dockerfile: Dockerfile
+    container_name: tracking-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_PORT=8085
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=jdbc:postgresql://postgres-tracking:5432/${TRACKING_DB_NAME}
+      - DATABASE_USERNAME=${TRACKING_DB_USER}
+      - DATABASE_PASSWORD=${TRACKING_DB_PASS}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-tracking:
+        condition: service_healthy
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================================
+  # RABBITMQ - Message Broker para comunicación asíncrona
+  # ============================================================
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: rabbitmq
@@ -219,13 +334,16 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # Base de datos PostgreSQL para Identity Service
+  # ============================================================
+  # BASES DE DATOS POSTGRESQL - Una por microservicio
+  # ============================================================
+
   postgres-identity:
     image: postgres:15-alpine
     container_name: postgres-identity
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=identity_db
+      - POSTGRES_DB=${IDENTITY_DB_NAME}
       - POSTGRES_USER=${IDENTITY_DB_USER}
       - POSTGRES_PASSWORD=${IDENTITY_DB_PASS}
     volumes:
@@ -235,19 +353,18 @@ services:
     networks:
       - trabajo-grado-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${IDENTITY_DB_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # Base de datos PostgreSQL para Submission Service
   postgres-submission:
     image: postgres:15-alpine
     container_name: postgres-submission
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=submission_db
+      - POSTGRES_DB=${SUBMISSION_DB_NAME}
       - POSTGRES_USER=${SUBMISSION_DB_USER}
       - POSTGRES_PASSWORD=${SUBMISSION_DB_PASS}
     volumes:
@@ -257,19 +374,18 @@ services:
     networks:
       - trabajo-grado-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${SUBMISSION_DB_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # Base de datos PostgreSQL para Notification Service
   postgres-notification:
     image: postgres:15-alpine
     container_name: postgres-notification
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=notification_db
+      - POSTGRES_DB=${NOTIFICATION_DB_NAME}
       - POSTGRES_USER=${NOTIFICATION_DB_USER}
       - POSTGRES_PASSWORD=${NOTIFICATION_DB_PASS}
     volumes:
@@ -279,16 +395,65 @@ services:
     networks:
       - trabajo-grado-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
+  postgres-review:
+    image: postgres:15-alpine
+    container_name: postgres-review
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${REVIEW_DB_NAME}
+      - POSTGRES_USER=${REVIEW_DB_USER}
+      - POSTGRES_PASSWORD=${REVIEW_DB_PASS}
+    volumes:
+      - postgres-review-data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${REVIEW_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  postgres-tracking:
+    image: postgres:15-alpine
+    container_name: postgres-tracking
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${TRACKING_DB_NAME}
+      - POSTGRES_USER=${TRACKING_DB_USER}
+      - POSTGRES_PASSWORD=${TRACKING_DB_PASS}
+    volumes:
+      - postgres-tracking-data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    networks:
+      - trabajo-grado-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TRACKING_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# ============================================================
+# NETWORKS
+# ============================================================
 networks:
   trabajo-grado-network:
     driver: bridge
+    name: trabajo-grado-network
 
+# ============================================================
+# VOLUMES
+# ============================================================
 volumes:
   rabbitmq-data:
     driver: local
@@ -301,4 +466,8 @@ volumes:
   postgres-submission-data:
     driver: local
   postgres-notification-data:
+    driver: local
+  postgres-review-data:
+    driver: local
+  postgres-tracking-data:
     driver: local
